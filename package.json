@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "db:push": "supabase db push",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "test:rls": "node scripts/test-rls.mjs",
+    "bootstrap:local": "node scripts/local-bootstrap.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

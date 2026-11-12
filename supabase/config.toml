@@ -161,7 +161,7 @@ site_url = "http://localhost:5173"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+additional_redirect_urls = ["http://localhost:5173/**", "http://127.0.0.1:5173/**"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -414,3 +414,12 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# ---- Edge Functions ---------------------------------------------------------
+# Called by a logged-in site admin; the function also checks the role itself.
+[functions.invite-university-admin]
+verify_jwt = true
+
+# Opened from an emailed link by someone without an account yet.
+[functions.accept-admin-invite]
+verify_jwt = false
