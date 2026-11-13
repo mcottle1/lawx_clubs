@@ -8,7 +8,7 @@ import ProposalStatusBadge from '../../components/ProposalStatusBadge'
 import { Alert, Button, Card, Field, inputClass, PageHeader } from '../../components/ui'
 import { SUPPORT_TYPES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
-import type { ConversationListItem, OpportunityCard, PartnerEvent, ProposalDetail } from '../../lib/types'
+import type { ConversationListItem, OpportunityCard, PartnerEvent, PartnerEventResult, ProposalDetail } from '../../lib/types'
 import { usePartner } from './PartnerContext'
 
 const PAGE_SIZE = 6
@@ -19,6 +19,7 @@ export default function PartnerDashboard() {
   const [convs, setConvs] = useState<ConversationListItem[]>([])
   const [events, setEvents] = useState<PartnerEvent[]>([])
   const [recentByUni, setRecentByUni] = useState<OpportunityCard[]>([])
+  const [results, setResults] = useState<PartnerEventResult[]>([])
 
   useEffect(() => {
     supabase.from('proposal_details').select('*').order('updated_at', { ascending: false })
@@ -27,6 +28,8 @@ export default function PartnerDashboard() {
       .then(({ data }) => setConvs((data as ConversationListItem[]) ?? []))
     supabase.from('partner_events').select('*').neq('approval_status', 'denied').order('starts_at')
       .then(({ data }) => setEvents((data as PartnerEvent[]) ?? []))
+    supabase.from('partner_event_results').select('*').order('starts_at', { ascending: false })
+      .then(({ data }) => setResults((data as PartnerEventResult[]) ?? []))
     const since = new Date(Date.now() - 14 * 864e5).toISOString()
     supabase.from('opportunity_cards').select('*').eq('status', 'open').gte('created_at', since).limit(200)
       .then(({ data }) => setRecentByUni((data as OpportunityCard[]) ?? []))
@@ -38,6 +41,9 @@ export default function PartnerDashboard() {
     const sponsoredUnis = new Set(proposals.filter((p) => p.status === 'approved').map((p) => p.university_id))
     const fresh = recentByUni.filter((o) => sponsoredUnis.has(o.university_id) && !proposals.some((p) => p.opportunity_id === o.id))
     if (fresh.length) out.push({ text: `${fresh.length} new opportunit${fresh.length === 1 ? 'y' : 'ies'} at schools you've sponsored before`, to: '#opportunities' })
+    for (const r of results.filter((r) => Date.now() - new Date(r.submitted_at).getTime() < 14 * 864e5).slice(0, 3)) {
+      out.push({ text: `${r.event_name} report is in — ${r.attendees} attended`, to: '#results' })
+    }
     const unread = convs.filter((c) => c.unread).length
     if (unread) out.push({ text: `${unread} conversation${unread === 1 ? '' : 's'} with new messages`, to: '/partner/messages' })
     const waitingClub = proposals.filter((p) => p.status === 'pending_club').length
@@ -47,7 +53,7 @@ export default function PartnerDashboard() {
     if (!partner.logo_path) out.push({ text: 'Add a logo so clubs recognize you', to: '/partner/profile' })
     if (!partner.open_to_sponsorships) out.push({ text: "You're hidden from clubs' partner directory — turn on “open to sponsorships”", to: '/partner/profile' })
     return out
-  }, [proposals, convs, recentByUni, partner])
+  }, [proposals, convs, recentByUni, results, partner])
 
   // Recent activity: messages + proposal status changes
   const activity = useMemo(() => {
@@ -70,8 +76,8 @@ export default function PartnerDashboard() {
                 {suggestions.map((s) => (
                   <li key={s.text}>
                     →{' '}
-                    {s.to === '#opportunities' ? (
-                      <button type="button" className="text-accent-700 hover:underline" onClick={() => document.getElementById('opportunities')?.scrollIntoView({ behavior: 'smooth' })}>{s.text}</button>
+                    {s.to.startsWith('#') ? (
+                      <button type="button" className="text-accent-700 hover:underline" onClick={() => document.getElementById(s.to.slice(1))?.scrollIntoView({ behavior: 'smooth' })}>{s.text}</button>
                     ) : (
                       <Link to={s.to} className="text-accent-700 hover:underline">{s.text}</Link>
                     )}
@@ -113,10 +119,30 @@ export default function PartnerDashboard() {
               />
             )}
           </Card>
-          <Card>
-            <h2 className="font-medium">Results</h2>
-            <p className="mt-2 text-sm text-slate-500">Attendance and offers redeemed from events you sponsor will appear here once clubs submit their post-event reports.</p>
-          </Card>
+          <section id="results" aria-labelledby="results-h">
+            <Card>
+              <h2 id="results-h" className="font-medium">Results from events you sponsored</h2>
+              {results.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">Attendance and offers redeemed appear here once clubs submit their post-event reports.</p>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {results.reduce((s, r) => s + r.attendees, 0)} students reached · {results.reduce((s, r) => s + (r.offers_redeemed ?? 0), 0)} offers redeemed
+                  </p>
+                  <ul className="mt-2 divide-y divide-slate-100 text-sm">
+                    {results.map((r) => (
+                      <li key={r.event_id} className="py-2">
+                        <p className="font-medium">{r.event_name}</p>
+                        <p className="text-xs text-slate-500">{r.club_name} · {new Date(r.starts_at).toLocaleDateString()}</p>
+                        <p className="mt-1">{r.attendees} attended{r.offers_redeemed !== null && ` · ${r.offers_redeemed} offers redeemed`}</p>
+                        {r.notes && <p className="mt-1 text-xs text-slate-600">“{r.notes}”</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Card>
+          </section>
         </div>
       </div>
     </>

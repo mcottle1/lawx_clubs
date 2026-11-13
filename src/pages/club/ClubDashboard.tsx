@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Todo } from '../../lib/types'
+import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Receipt, Todo } from '../../lib/types'
+import ReceiptsCard from './dashboard/ReceiptsCard'
 import { ButtonLink, PageHeader } from '../../components/ui'
 import { useClub } from './ClubContext'
 import BudgetCard from './dashboard/BudgetCard'
@@ -21,6 +22,7 @@ export default function ClubDashboard() {
   const [files, setFiles] = useState<ClubFile[]>([])
   const [proposals, setProposals] = useState<ProposalDetail[]>([])
   const [unread, setUnread] = useState(0)
+  const [receipts, setReceipts] = useState<(Receipt & { events: { name: string } | null })[]>([])
 
   const loadCounts = useCallback(async () => {
     const { data } = await supabase.from('club_member_counts').select('*').eq('club_id', club.id).order('recorded_on')
@@ -46,6 +48,8 @@ export default function ClubDashboard() {
       .then(({ data }) => setProposals((data as ProposalDetail[]) ?? []))
     supabase.from('conversation_list').select('id', { count: 'exact', head: true }).eq('unread', true)
       .then(({ count }) => setUnread(count ?? 0))
+    supabase.from('receipts').select('*, events(name)').eq('club_id', club.id).order('created_at', { ascending: false }).limit(20)
+      .then(({ data }) => setReceipts((data as (Receipt & { events: { name: string } | null })[]) ?? []))
     void loadCounts()
     void loadTodos()
   }, [club.id, loadCounts, loadTodos])
@@ -64,6 +68,7 @@ export default function ClubDashboard() {
         <div className="lg:row-span-3 space-y-4">
           <PendingApprovals events={events} proposals={proposals} unread={unread} />
           <TodoList clubId={club.id} todos={todos} onChange={loadTodos} />
+          <ReceiptsCard receipts={receipts} />
           <FilesSummary files={files} />
         </div>
         <div className="lg:col-span-2">

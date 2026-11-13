@@ -21,6 +21,8 @@ const ClubFiles = lazy(() => import('./pages/club/ClubFiles'))
 const ClubSettings = lazy(() => import('./pages/club/ClubSettings'))
 const EventDetail = lazy(() => import('./pages/club/events/EventDetail'))
 const EventForm = lazy(() => import('./pages/club/events/EventForm'))
+const EventReport = lazy(() => import('./pages/club/events/EventReport'))
+const ReceiptsQueue = lazy(() => import('./pages/university-admin/ReceiptsQueue'))
 const Partnerships = lazy(() => import('./pages/club/partnerships/Partnerships'))
 const OpportunityForm = lazy(() => import('./pages/club/partnerships/OpportunityForm'))
 const Inbox = lazy(() => import('./components/messaging/Inbox'))
@@ -57,6 +59,7 @@ export default function App() {
             <Route path="events/new" element={<EventForm />} />
             <Route path="events/:id" element={<EventDetail />} />
             <Route path="events/:id/edit" element={<EventForm />} />
+            <Route path="events/:id/report" element={<EventReport />} />
             <Route path="partnerships" element={<Partnerships />} />
             <Route path="opportunities/new" element={<OpportunityForm />} />
             <Route path="opportunities/:id/edit" element={<OpportunityForm />} />
@@ -75,6 +78,7 @@ export default function App() {
           </Route>
           <Route path="university-admin" element={<RequireRole roles={['university_admin']}><AdminLayout /></RequireRole>}>
             <Route index element={<Approvals />} />
+            <Route path="receipts" element={<ReceiptsQueue />} />
             <Route path="clubs" element={<ClubsOverview />} />
             <Route path="settings" element={<UniversityAdminHome />} />
           </Route>

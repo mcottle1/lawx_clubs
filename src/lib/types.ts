@@ -243,3 +243,36 @@ export interface PartnerEvent {
   club_name: string
   university_name: string
 }
+
+export type ReceiptStatus = 'pending' | 'approved' | 'reimbursed' | 'denied'
+
+export interface Receipt {
+  id: string
+  club_id: string
+  event_id: string
+  event_report_id: string
+  storage_path: string
+  file_name: string
+  mime_type: string | null
+  size_bytes: number | null
+  amount: number
+  description: string | null
+  status: ReceiptStatus
+  admin_note: string | null
+  reviewed_at: string | null
+  reimbursed_at: string | null
+  created_at: string
+}
+
+export interface PartnerEventResult {
+  event_id: string
+  event_name: string
+  starts_at: string
+  time_zone: string
+  club_name: string
+  university_name: string
+  attendees: number
+  offers_redeemed: number | null
+  notes: string | null
+  submitted_at: string
+}

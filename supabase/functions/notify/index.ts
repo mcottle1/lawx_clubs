@@ -6,48 +6,17 @@
 //   proposal_submitted id = proposal     → club: new proposal
 //   proposal_responded id = proposal     → partner: accepted/declined (+ admin: pending approval)
 //   reviewed           id, kind = 'event' | 'proposal' → club (+ partner): approved/denied
+//   report_submitted   id = event        → sponsor: results are in (+ admin: receipts to review)
+//   receipt_reviewed   id = receipt      → club: receipt status changed
 //
 // Every send is checked against what the caller actually did (so this can't
 // be used to email arbitrary people) and de-duplicated through email_log.
-import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import { adminClient, siteUrl, userClient } from '../_shared/clients.ts'
+import { adminClient, userClient } from '../_shared/clients.ts'
 import { corsHeaders, errorResponse, json } from '../_shared/cors.ts'
 import { sendEmail } from '../_shared/email.ts'
+import { adminEmailFor, link, notifyAdminOfEvent } from '../_shared/notifications.ts'
 
-type Db = SupabaseClient
-
-const link = (route: string) => `${siteUrl()}#${route}`
 const today = () => new Date().toISOString().slice(0, 10)
-
-function when(startsAt: string, timeZone: string): string {
-  return new Date(startsAt).toLocaleString('en-US', {
-    timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-  })
-}
-
-async function adminEmailFor(db: Db, clubId: string): Promise<string | null> {
-  const { data: club } = await db.from('clubs').select('university_id').eq('id', clubId).single()
-  const { data: admin } = await db.from('university_admins').select('contact_email, user_id')
-    .eq('university_id', club?.university_id).maybeSingle()
-  if (!admin) return null
-  const { data: profile } = await db.from('profiles').select('is_active').eq('user_id', admin.user_id).single()
-  return profile?.is_active ? admin.contact_email : null
-}
-
-async function notifyAdminOfEvent(db: Db, eventId: string) {
-  const { data: ev } = await db.from('events').select('id, name, club_id, approval_status, updated_at, starts_at, time_zone, partner_id, clubs(name)').eq('id', eventId).single()
-  if (!ev || ev.approval_status !== 'pending') return 'skipped'
-  const to = await adminEmailFor(db, ev.club_id)
-  if (!to) return 'skipped'
-  // deno-lint-ignore no-explicit-any
-  const clubName = (ev as any).clubs?.name ?? 'A club'
-  return sendEmail(db, {
-    to, template: 'pending_approval', relatedId: ev.id,
-    dedupeKey: `pending_event:${ev.id}:${ev.updated_at}`,
-    subject: `Approval needed: ${ev.name}`,
-    text: `${clubName} submitted "${ev.name}" (${when(ev.starts_at, ev.time_zone)})${ev.partner_id ? ', including a partnership' : ''} for approval.\n\nReview it here:\n${link('/university-admin')}\n`,
-  })
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -190,6 +159,73 @@ Deno.serve(async (req) => {
         })
       }
       return json({ status: 'ok' })
+    }
+
+    case 'report_submitted': {
+      const { data: ev } = await db.from('events')
+        .select('id, name, club_id, partner_id, clubs(name, user_id), partners(email, name), event_reports(id, attendees, offers_redeemed, notes)')
+        .eq('id', id).maybeSingle()
+      // deno-lint-ignore no-explicit-any
+      const e = ev as any
+      if (!e || e.clubs?.user_id !== user.id) return errorResponse('Not allowed', 403)
+      const report = Array.isArray(e.event_reports) ? e.event_reports[0] : e.event_reports
+      if (!report) return json({ status: 'skipped' })
+      const out: Record<string, string> = {}
+      if (e.partner_id && e.partners?.email) {
+        const lines = [
+          `${e.clubs.name} reported on "${e.name}", which you sponsored:`,
+          '',
+          `Attendees: ${report.attendees}`,
+          report.offers_redeemed !== null ? `Offers redeemed: ${report.offers_redeemed}` : null,
+          report.notes ? `Notes from the club: ${report.notes}` : null,
+          '',
+          'See your results and other upcoming opportunities:',
+          link('/partner'),
+        ].filter((l) => l !== null)
+        out.partner = await sendEmail(db, {
+          to: e.partners.email, template: 'report_available', relatedId: id, dedupeKey: `report_available:${id}`,
+          subject: `Results are in: ${e.name}`,
+          text: lines.join('\n') + '\n',
+        })
+      }
+      const { count } = await db.from('receipts').select('id', { count: 'exact', head: true }).eq('event_id', id).eq('status', 'pending')
+      if (count) {
+        const to = await adminEmailFor(db, e.club_id)
+        if (to) {
+          out.admin = await sendEmail(db, {
+            to, template: 'receipts_submitted', relatedId: id, dedupeKey: `receipts_submitted:${id}:${count}`,
+            subject: `Receipts to review: ${e.clubs.name}`,
+            text: `${e.clubs.name} submitted ${count} receipt(s) for "${e.name}".\n\nReview them here:\n${link('/university-admin/receipts')}\n`,
+          })
+        }
+      }
+      return json(out)
+    }
+
+    case 'receipt_reviewed': {
+      const { data: r } = await db.from('receipts')
+        .select('id, status, amount, admin_note, file_name, club_id, clubs(email, university_id), events(name)')
+        .eq('id', id).maybeSingle()
+      // deno-lint-ignore no-explicit-any
+      const rc = r as any
+      const { data: adminRow } = await db.from('university_admins').select('university_id').eq('user_id', user.id).maybeSingle()
+      if (!rc || !adminRow || rc.clubs?.university_id !== adminRow.university_id || rc.status === 'pending') {
+        return errorResponse('Not allowed', 403)
+      }
+      const amount = Number(rc.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+      const lines = [
+        `Your receipt "${rc.file_name}" (${amount}) for "${rc.events?.name}" was ${rc.status}.`,
+        rc.admin_note ? `Note: ${rc.admin_note}` : null,
+        '',
+        'See your receipts:',
+        link('/club'),
+      ].filter((l) => l !== null)
+      const status = await sendEmail(db, {
+        to: rc.clubs.email, template: 'receipt_status', relatedId: id, dedupeKey: `receipt:${id}:${rc.status}`,
+        subject: `Receipt ${rc.status}: ${rc.events?.name ?? rc.file_name}`,
+        text: lines.join('\n') + '\n',
+      })
+      return json({ status })
     }
 
     default:

@@ -11,6 +11,11 @@ Server-side code that needs secrets. Deploy all with `npx supabase functions dep
 `_shared/` holds CORS, Supabase clients, token hashing and the Resend email helper (which logs
 every send to `email_log` and skips duplicates by `dedupe_key`).
 
-Coming later: `run-daily-jobs` (Phase 4), AI functions (Phase 5).
+| `run-daily-jobs` | `x-cron-secret` header (`--no-verify-jwt`) | Daily reminders, report requests, to-do upkeep; `?dry_run=1` reports without sending |
+
+`notify` also handles `report_submitted` (results to the sponsor, receipts alert to the admin) and
+`receipt_reviewed` (status email to the club).
+
+Coming later: AI functions (Phase 5).
 
 Secrets are set with `npx supabase secrets set NAME=value` — never committed.

@@ -179,3 +179,44 @@ Running log of judgment calls made where the spec was ambiguous.
   scheduling form). Pending events whose date already passed are still reviewable and flagged.
 - **Opportunity photos** go in the public `flyers` bucket under the club's folder but are not
   listed under Club files (they're marketing images, not flyers).
+
+## Phase 4
+
+- **Daily job = one Edge Function (`run-daily-jobs`) called by a GitHub Actions cron**, as the
+  spec asked. It's authenticated by a shared `CRON_SECRET` header (compared in constant time)
+  instead of a Supabase login token, and supports `?dry_run=1`. Runs at 14:17 UTC daily
+  (≈7–8 AM Mountain); the odd minute avoids GitHub's top-of-the-hour congestion.
+- **Idempotency:** every email has an `email_log.dedupe_key`, and the event row records
+  `partner_reminder_sent_at`, `location_reminder_sent_at`, `report_requested_at`,
+  `report_reminder_sent_at`. Those stamps are set even when email isn't configured (status
+  "skipped"), so a missing API key never causes daily repeats.
+- **"Today" is computed in each event's own time zone.** A reminder for "N days before" fires the
+  first daily run on or after (event date − N); a missed day (e.g. GitHub skipped a run) catches up
+  the next day rather than being lost. The report request goes out the first run after the event's
+  local date has ended; the reminder goes ≥3 days (minus an hour of slack for schedule drift)
+  after the request. Only **approved** events get report requests; events older than 60 days are
+  ignored so turning the job on late doesn't email about ancient events.
+- **Reports:** clubs can submit (and later correct) a report only for their own events that have
+  ended and weren't denied (RLS). Amount spent is required (can be $0); offers redeemed is
+  optional. The budget updates automatically through the Phase 2 budget view.
+- **To-dos:** the job adds "Submit report for X" (due 3 days later); submitting the report checks
+  it off (database trigger) and adds "Follow up with <sponsor> after X" (due in a week) when the
+  event had a sponsor. The job also closes leftover sponsor/room to-dos for past events.
+- **Partner follow-up checklist** is guidance plus one action: a pre-written thank-you (attendance,
+  offers redeemed, notes, "can we work together again?") sent as an on-site message for site
+  partners, or copied to the clipboard for outside sponsors. The checklist items themselves aren't
+  stored; the "Follow up" to-do tracks completion. AI social-media recaps are Phase 5.
+- **Sponsors are emailed the results automatically** when the report is first submitted (once —
+  later edits don't re-email). They see attendance, offers redeemed and the club's notes, never
+  the amount spent (`partner_event_results` view).
+- **Receipts** are attached to a report (one or many; photo or PDF, 10 MB, with an amount and
+  optional "what for"). They live in the private `receipts` bucket; only the club and its
+  university's admin can open them. Clubs can remove a receipt only while it's pending.
+- **Receipt statuses:** pending → approved → reimbursed, or pending/approved → denied (note
+  required); enforced by `review_receipt()`. Receipt totals are informational: the amount that
+  counts against the budget is the report's "amount spent".
+- **Admin emails for receipts:** one "Receipts to review" email per report submission (and again
+  if more receipts are added). Clubs get an email on every receipt status change.
+- **Approval catch-up:** if the browser never called `notify` for a pending event (closed tab,
+  network error), the daily job sends the admin's "approval needed" email for events that have been
+  pending more than an hour with no such email logged.

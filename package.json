@@ -12,7 +12,8 @@
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "test:rls": "node scripts/test-rls.mjs",
-    "bootstrap:local": "node scripts/local-bootstrap.mjs"
+    "bootstrap:local": "node scripts/local-bootstrap.mjs",
+    "test:jobs": "node scripts/test-daily-jobs.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.22",

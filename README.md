@@ -7,7 +7,7 @@ partners find clubs to sponsor. See [`SPEC.md`](SPEC.md) for the full spec and
 **Stack:** React + TypeScript + Vite + Tailwind CSS · Supabase (Postgres, Auth, Storage,
 Edge Functions) · Resend (email) · GitHub Pages via GitHub Actions.
 
-**Status:** Phase 3 (partnerships) complete.
+**Status:** Phase 4 (automation, reports, receipts) complete.
 
 ## Repository layout
 
@@ -216,6 +216,83 @@ npx supabase functions deploy
   pending approval, new message, new proposal, accepted/declined, approved/denied). No new
   secrets: it uses the same `RESEND_API_KEY`, `EMAIL_FROM` and `SITE_URL`.
 
+- **Phase 4** added one migration (reports, receipts + private `receipts` bucket, daily-job
+  bookkeeping), a new function `run-daily-jobs`, a new workflow `.github/workflows/daily-jobs.yml`,
+  and one new secret, `CRON_SECRET` (set it up once — see **Daily jobs** below).
+
+## Daily jobs (Phase 4)
+
+Once a day, GitHub Actions calls the `run-daily-jobs` Edge Function, which:
+
+- emails "find a sponsor" / "book a room" reminders on the day each event's reminder setting says
+  (the room reminder includes your university's scheduling link or instructions);
+- the day after an approved event, emails the club a link to the report form and adds a
+  "Submit report" to-do; if there's still no report 3 days later, sends **one** reminder;
+- closes leftover "find a sponsor"/"book a room" to-dos once an event has passed;
+- re-sends any "approval needed" email the browser didn't trigger.
+
+It's safe to run more than once a day: every email is recorded in `email_log` and stamped on the
+event, so nothing is sent twice.
+
+### One-time setup
+
+1. Make a long random secret (any password generator works), e.g.:
+
+```bash
+openssl rand -hex 32
+```
+
+2. Give it to Supabase (the function checks it):
+
+```bash
+npx supabase secrets set CRON_SECRET=paste-the-secret-here
+```
+
+3. Give the **same** value to GitHub: repo **Settings → Secrets and variables → Actions →
+   Secrets** tab → **New repository secret** → name `CRON_SECRET`. (This one *is* a secret,
+   unlike the two `VITE_` variables.) The workflow also uses your existing `VITE_SUPABASE_URL`
+   variable.
+4. Deploy the function (it needs no login token; it checks the secret instead):
+
+```bash
+npx supabase functions deploy
+```
+
+   If the test in step 5 fails with `Invalid JWT` / `Missing authorization header`, deploy it
+   explicitly without login checks: `npx supabase functions deploy run-daily-jobs --no-verify-jwt`
+   (same for `accept-admin-invite`).
+5. Test it: GitHub → **Actions → Daily jobs → Run workflow**, tick **dry run**, run. The log ends
+   with JSON like `{"ok":true,"dry_run":true,"counts":{...},"actions":[...]}` listing what it
+   *would* send. Run it again without dry run to actually send. After that it runs by itself every
+   day at 14:17 UTC (about 7–8 AM in Utah; GitHub sometimes starts scheduled runs a bit late).
+
+> GitHub pauses scheduled workflows in repos with no activity for 60 days. If that happens,
+> the Actions tab shows a banner with a button to re-enable it.
+
+## How to test Phase 4 (reports and receipts)
+
+1. **Make an event that already happened.** The form only allows future events, so either wait
+   for a real one or, in the Supabase **SQL Editor**, move one of your approved test events into
+   the past (replace the name):
+
+```sql
+update public.events
+set starts_at = now() - interval '2 days', ends_at = now() - interval '2 days' + interval '1 hour',
+    approval_status = 'approved'
+where name = 'Your event name';
+```
+
+2. **Run the daily job** (Actions → Daily jobs → Run workflow). The club gets a "How did … go?"
+   email and a **Submit report** to-do.
+3. **Club → the event → Submit report:** attendees, amount spent, offers redeemed, notes, and one
+   or more receipts (photo or PDF + amount). After saving: the budget drops by the amount spent,
+   the follow-up checklist appears (with a pre-written thank-you message if the sponsor is a site
+   partner), a "Follow up with …" to-do is added, and the sponsor is emailed the results.
+4. **Admin → Receipts:** preview each receipt, **Approve** → **Mark reimbursed**, or **Deny**
+   (note required). The club sees each status on its dashboard and gets an email.
+5. **Partner dashboard:** "Results from events you sponsored" shows attendance, offers redeemed
+   and the club's notes (never the amount spent), plus a "report is in" next step.
+
 ## How to test Phase 3 (partnerships)
 
 Use three browsers (or one normal + two private windows): a **club**, a **partner** (open to
@@ -302,10 +379,14 @@ npm run dev
 - Bootstrap creates `siteadmin@example.com` and `admin@byu.example` (password `password123`)
   and makes BYU participating. Local email confirmation is off.
 - Emails (password reset etc.) appear in the local inbox at <http://127.0.0.1:54324>.
-- `npm run test:rls` runs ~100 security checks against the local database: sign-up role rules,
+- `npm run test:rls` runs ~130 security checks against the local database: sign-up role rules,
   who can read/edit what, deactivation, storage folders, event approval/editing rules, files,
-  to-dos, member counts, budgets, opportunities, messages, proposals and approvals.
+  to-dos, member counts, budgets, opportunities, messages, proposals, approvals, reports and
+  receipts.
 - `npx supabase db reset` wipes the local DB and re-runs all migrations (then bootstrap again).
+- To test the daily job locally, create `supabase/functions/.env` (git-ignored) containing
+  `CRON_SECRET=local-test-secret`, restart `npx supabase functions serve`, then run
+  `npm run test:jobs` (~20 checks: each reminder fires once, on the right day, and never twice).
 
 ## Day-to-day commands
 
@@ -318,6 +399,7 @@ npm run dev
 | `npm run db:reset` | (Local only) wipe and re-run all migrations |
 | `npm run bootstrap:local` | (Local only) create demo site admin + BYU admin |
 | `npm run test:rls` | (Local only) Row Level Security test suite |
+| `npm run test:jobs` | (Local only) daily-job checks (needs `CRON_SECRET` in `supabase/functions/.env`) |
 
 `/#/status` (linked in the footer) confirms the app can reach Supabase.
 
@@ -331,9 +413,10 @@ npm run dev
 | `SITE_URL` | Supabase function secret | No | Base URL used in emailed links |
 | `RESEND_API_KEY` | Supabase function secret | **Yes** | Sending email |
 | `EMAIL_FROM` | Supabase function secret | No | Sender, once a domain is verified |
+| `CRON_SECRET` | Supabase function secret **and** GitHub Actions secret (same value) | **Yes** | Lets the daily workflow call `run-daily-jobs` |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are provided to Edge
-Functions automatically. Later phases add `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` and `CRON_SECRET`.
+Functions automatically. Phase 5 adds `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.
 
 ## Security model
 
@@ -355,7 +438,8 @@ Functions automatically. Later phases add `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
   admin can approve, a deny needs a reason).
 - Storage: users can only write inside `<bucket>/<their user id>/`, 10 MB max per file, with
   per-bucket type limits. `logos` and `flyers` are public; `club-docs` (constitutions, other
-  documents) is private and opened through 10-minute signed links.
+  documents) is private and opened through 10-minute signed links. `receipts` is private too:
+  only the club and its university's admin can open a receipt.
 
 ## Changing the accent color
 

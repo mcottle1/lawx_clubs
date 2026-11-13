@@ -216,7 +216,7 @@ check('partner sees no club budgets', (pBudget ?? []).length === 0)
 const { data: reports } = await clubA.from('event_reports').select('attendees')
 check('club reads own event reports', reports?.length === 1)
 const { error: repIns } = await clubA.from('event_reports').insert({ event_id: ev.id, attendees: 1 })
-check('club cannot write reports yet (Phase 4)', !!repIns)
+check('club cannot report on an event that has not happened', !!repIns)
 
 
 // =============================================================================
@@ -343,6 +343,83 @@ const { data: pubClosed } = await anon.rpc('get_public_opportunity', { p_id: opp
 check('closed opportunity is not public', pubClosed === null)
 const { error: closedProp } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp3.id, p_headcount: 5 })
 check('cannot propose on a closed opportunity', !!closedProp)
+
+
+// =============================================================================
+// Phase 4: reports, receipts, partner results
+// =============================================================================
+console.log('\n--- Phase 4 ---')
+const { data: ended } = await service.from('events').insert({
+  club_id: clubARow.id, name: 'Ended Lunch', starts_at: inDays(-3), ends_at: inDays(-3, 13),
+  approval_status: 'approved', partner_id: partnerRow.id, budget: 200, location: 'Room 9',
+}).select().single()
+const { data: deniedEnded } = await service.from('events').insert({
+  club_id: clubARow.id, name: 'Denied Past', starts_at: inDays(-3), ends_at: inDays(-3, 13), approval_status: 'denied',
+}).select().single()
+
+const { data: rep, error: repErr } = await clubA.from('event_reports').insert({ event_id: ended.id, attendees: 52, amount_spent: 180, offers_redeemed: 7, notes: 'Packed room' }).select().single()
+check('club reports on its ended event', !repErr && !!rep, repErr?.message)
+const { data: fu } = await clubA.from('todos').select('title').eq('related_event_id', ended.id).eq('system_kind', 'follow_up').maybeSingle()
+check('report adds "Follow up with sponsor" to-do', fu?.title?.startsWith('Follow up with Test Firm'))
+const { error: futureRep } = await clubA.from('event_reports').insert({ event_id: ev.id, attendees: 1 })
+check('cannot report on an event that has not ended', !!futureRep)
+const { error: deniedRep } = await clubA.from('event_reports').insert({ event_id: deniedEnded.id, attendees: 1 })
+check('cannot report on a denied event', !!deniedRep)
+const { data: bEnded } = await service.from('events').insert({ club_id: clubBRow.id, name: 'B ended', starts_at: inDays(-2), ends_at: inDays(-2, 13), approval_status: 'approved' }).select().single()
+const { error: otherRep } = await clubA.from('event_reports').insert({ event_id: bEnded.id, attendees: 1 })
+check('cannot report on another club\'s event', !!otherRep)
+const { data: repUpd } = await clubA.from('event_reports').update({ attendees: 55 }).eq('id', rep.id).select().single()
+check('club can correct its report', repUpd?.attendees === 55)
+
+// receipts
+const rcptPath = `${clubARow.user_id}/receipt-${stamp}.pdf`
+const upR = await clubA.storage.from('receipts').upload(rcptPath, pdfBlob)
+check('club uploads receipt file to own folder', !upR.error, upR.error?.message)
+const { data: rcpt, error: rcptErr } = await clubA.from('receipts').insert({
+  club_id: clubARow.id, event_id: ended.id, event_report_id: rep.id, storage_path: rcptPath, file_name: 'pizza.pdf', amount: 180,
+}).select().single()
+check('club records receipt', !rcptErr && rcpt?.status === 'pending', rcptErr?.message)
+const { error: rcptSpoof } = await clubB.c.from('receipts').insert({ club_id: clubBRow.id, event_id: ended.id, event_report_id: rep.id, storage_path: `${bUser.user.id}/x.pdf`, file_name: 'x', amount: 1 })
+check('club cannot attach receipts to another club\'s report', !!rcptSpoof)
+const { error: statusSpoof } = await clubA.from('receipts').update({ status: 'reimbursed' }).eq('id', rcpt.id)
+const { data: rcptStill } = await clubA.from('receipts').select('status').eq('id', rcpt.id).single()
+check('club cannot change receipt status', rcptStill.status === 'pending', statusSpoof?.message ?? '')
+const { data: bR } = await clubB.c.from('receipts').select('id')
+check('other club cannot see receipts', (bR ?? []).length === 0)
+const bFile = await clubB.c.storage.from('receipts').createSignedUrl(rcptPath, 60)
+check('other club cannot open receipt file', !bFile.data?.signedUrl)
+const { data: pR } = await partnerC.from('receipts').select('id')
+check('partner cannot see receipts', (pR ?? []).length === 0)
+const adminFile = await admin.storage.from('receipts').createSignedUrl(rcptPath, 60)
+check('university admin can open receipt file', !!adminFile.data?.signedUrl, adminFile.error?.message)
+const usuFile = await usuAdmin.storage.from('receipts').createSignedUrl(rcptPath, 60)
+check('other university admin cannot open receipt file', !usuFile.data?.signedUrl)
+const { data: usuR } = await usuAdmin.from('receipts').select('id')
+check('other university admin cannot see receipts', (usuR ?? []).length === 0)
+
+const { error: skip } = await admin.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'reimbursed' })
+check('cannot skip from pending straight to reimbursed', !!skip)
+const { error: denyNoNote } = await admin.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'denied', p_note: '' })
+check('denying a receipt needs a note', !!denyNoNote)
+const { error: usuRev } = await usuAdmin.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'approved' })
+check('other university admin cannot review the receipt', !!usuRev)
+const { error: clubRev } = await clubA.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'approved' })
+check('club cannot review its own receipt', !!clubRev)
+const { error: apprR } = await admin.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'approved' })
+const { error: paidR } = await admin.rpc('review_receipt', { p_receipt_id: rcpt.id, p_status: 'reimbursed', p_note: 'Check #1042' })
+const { data: rcptDone } = await clubA.from('receipts').select('status, reimbursed_at, admin_note').eq('id', rcpt.id).single()
+check('admin approves then marks reimbursed', !apprR && !paidR && rcptDone.status === 'reimbursed' && rcptDone.reimbursed_at && rcptDone.admin_note === 'Check #1042')
+await clubA.from('receipts').delete().eq('id', rcpt.id)
+const { data: rcptKept } = await clubA.from('receipts').select('id').eq('id', rcpt.id)
+check('club cannot delete a processed receipt', rcptKept?.length === 1)
+
+// partner results
+const { data: results } = await partnerC.from('partner_event_results').select('*')
+const mineRes = results?.find((r) => r.event_id === ended.id)
+check('partner sees results for sponsored event', mineRes?.attendees === 55 && mineRes?.offers_redeemed === 7 && mineRes?.notes === 'Packed room')
+check('partner results do not include spending', mineRes && !('amount_spent' in mineRes))
+const { data: bResults } = await clubB.c.from('partner_event_results').select('event_id')
+check('non-partners see no partner results', (bResults ?? []).length === 0)
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

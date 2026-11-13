@@ -77,7 +77,6 @@ export default function UniversityAdminHome() {
           </form>
         </Card>
       </div>
-      <Alert kind="info" className="mt-6">The receipts and reimbursement queue arrives in a later phase.</Alert>
     </>
   )
 }

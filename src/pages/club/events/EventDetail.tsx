@@ -145,6 +145,11 @@ export default function EventDetail() {
         {ended && (
           <Card>
             <h2 className="font-medium">Event report</h2>
+            <div className="mt-1">
+              <ButtonLink to={`/club/events/${event.id}/report`} variant={report ? 'secondary' : 'primary'} className="px-3 py-1 text-sm">
+                {report ? 'Edit report & receipts' : 'Submit report'}
+              </ButtonLink>
+            </div>
             {report ? (
               <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-3">
                 <div><dt className="text-slate-500">Attendees</dt><dd className="text-lg font-semibold">{report.attendees}</dd></div>
@@ -153,7 +158,7 @@ export default function EventDetail() {
                 {report.notes && <div className="sm:col-span-3"><dt className="text-slate-500">Notes</dt><dd className="whitespace-pre-line">{report.notes}</dd></div>}
               </dl>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">No report yet. Post-event reporting is coming in a later phase.</p>
+              <p className="mt-2 text-sm text-slate-500">No report yet — add attendance, spending (deducted from your budget), notes and receipts.</p>
             )}
           </Card>
         )}

@@ -427,3 +427,7 @@ verify_jwt = false
 # Called by signed-in users right after an action; it re-checks who did what.
 [functions.notify]
 verify_jwt = true
+
+# Called by the daily GitHub Actions workflow; protected by the CRON_SECRET header instead of a login.
+[functions.run-daily-jobs]
+verify_jwt = false
