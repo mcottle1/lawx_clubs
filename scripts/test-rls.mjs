@@ -101,5 +101,121 @@ check('partner cannot upload into another user folder', !!other.error)
 const pdf = await partner.c.storage.from('logos').upload(`${pu.user.id}/x.pdf`, new Blob(['%PDF'], { type: 'application/pdf' }))
 check('logos bucket rejects non-images', !!pdf.error)
 
+
+// =============================================================================
+// Phase 2: events, to-dos, member counts, files, budget
+// =============================================================================
+console.log('\n--- Phase 2 ---')
+const service = createClient(URL, st.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+const clubA = club.c
+const { data: clubARow } = await clubA.from('clubs').select('id, user_id').single()
+const clubB = await signUp(`clubb${stamp}@example.com`, { role: 'club', club_name: 'Club B', university_id: byu.id, initial_budget: '500' })
+const { data: clubBRow } = await clubB.c.from('clubs').select('id').single()
+const inDays = (d, h = 12) => { const t = new Date(); t.setDate(t.getDate() + d); t.setHours(h, 0, 0, 0); return t.toISOString() }
+
+const { data: ev, error: evErr } = await clubA.from('events').insert({
+  club_id: clubARow.id, name: 'Speaker Lunch', starts_at: inDays(20), ends_at: inDays(20, 13),
+  time_zone: 'America/Denver', budget: 300, partner_reminder_days: 7,
+}).select().single()
+check('club creates future event (pending)', !evErr && ev?.approval_status === 'pending', evErr?.message)
+const { data: sysTodos } = await clubA.from('todos').select('system_kind, done, due_on').eq('related_event_id', ev.id)
+check('system to-dos created for missing sponsor + room', sysTodos?.length === 2 && sysTodos.every((t) => !t.done))
+const sponsorTodo = sysTodos.find((t) => t.system_kind === 'find_sponsor')
+const eventDay = new Date(inDays(20)); eventDay.setDate(eventDay.getDate() - 7)
+check('find-sponsor due date = event date − reminder days', sponsorTodo?.due_on === eventDay.toLocaleDateString('en-CA', { timeZone: 'America/Denver' }), sponsorTodo?.due_on)
+
+const { error: pastErr } = await clubA.from('events').insert({ club_id: clubARow.id, name: 'Old', starts_at: inDays(-2), ends_at: inDays(-2, 13) })
+check('club cannot create a past event', !!pastErr)
+const { error: approveIns } = await clubA.from('events').insert({ club_id: clubARow.id, name: 'Sneaky', starts_at: inDays(5), ends_at: inDays(5, 13), approval_status: 'approved' })
+check('club cannot insert an approved event', !!approveIns)
+const { error: approveUpd } = await clubA.from('events').update({ approval_status: 'approved' }).eq('id', ev.id)
+check('club cannot approve its own event', !!approveUpd)
+const { error: otherClubIns } = await clubB.c.from('events').insert({ club_id: clubARow.id, name: 'X', starts_at: inDays(5), ends_at: inDays(5, 13) })
+check('club cannot create events for another club', !!otherClubIns)
+
+await clubA.from('events').update({ location: 'Room 101' }).eq('id', ev.id)
+const { data: roomTodo } = await clubA.from('todos').select('done').eq('related_event_id', ev.id).eq('system_kind', 'book_room').single()
+check('adding a location completes "Book a room"', roomTodo?.done === true)
+
+await service.from('events').update({ approval_status: 'approved' }).eq('id', ev.id)
+await clubA.from('events').update({ flyer_path: null }).eq('id', ev.id)
+const { data: stillApproved } = await clubA.from('events').select('approval_status').eq('id', ev.id).single()
+check('cosmetic edit keeps approval', stillApproved?.approval_status === 'approved')
+await clubA.from('events').update({ budget: 400 }).eq('id', ev.id)
+const { data: reset } = await clubA.from('events').select('approval_status').eq('id', ev.id).single()
+check('changing details sends approved event back to pending', reset?.approval_status === 'pending')
+
+const { data: past } = await service.from('events').insert({ club_id: clubARow.id, name: 'Past Mixer', starts_at: inDays(-10), ends_at: inDays(-10, 14), budget: 200, approval_status: 'approved' }).select().single()
+const { error: pastEdit } = await clubA.from('events').update({ name: 'Changed' }).eq('id', past.id)
+check('club cannot edit a past event', !!pastEdit)
+const { error: pastDel } = await clubA.from('events').delete().eq('id', past.id)
+check('club cannot delete a past event', !!pastDel)
+
+const { data: bSeesEvents } = await clubB.c.from('events').select('id')
+check('other club sees none of club A events', (bSeesEvents ?? []).length === 0)
+const { data: bSeesTodos } = await clubB.c.from('todos').select('id').eq('club_id', clubARow.id)
+check('other club sees none of club A to-dos', (bSeesTodos ?? []).length === 0)
+const { data: adminEvents } = await admin.from('events').select('id, club_id')
+check('BYU admin sees BYU events', adminEvents?.some((e) => e.id === ev.id))
+const { data: partnerEvents } = await partner.c.from('events').select('id')
+check('partner sees no club events (yet)', (partnerEvents ?? []).length === 0)
+
+// to-dos
+const { error: sysIns } = await clubA.from('todos').insert({ club_id: clubARow.id, title: 'fake', source: 'system' })
+check('club cannot create system to-dos', !!sysIns)
+const { data: manual, error: manErr } = await clubA.from('todos').insert({ club_id: clubARow.id, title: 'Order pizza', due_on: '2030-01-01' }).select().single()
+check('club adds manual to-do', !manErr && manual?.source === 'manual', manErr?.message)
+const { data: doneTodo } = await clubA.from('todos').update({ done: true }).eq('id', manual.id).select().single()
+check('completing a to-do stamps done_at', !!doneTodo?.done_at)
+
+// member counts
+const today = new Date().toLocaleDateString('en-CA')
+const mc1 = await clubA.from('club_member_counts').upsert({ club_id: clubARow.id, count: 40, recorded_on: today }, { onConflict: 'club_id,recorded_on' })
+const mc2 = await clubA.from('club_member_counts').upsert({ club_id: clubARow.id, count: 42, recorded_on: today, source: 'roster' }, { onConflict: 'club_id,recorded_on' })
+const { data: counts } = await clubA.from('club_member_counts').select('count')
+check('member count upsert replaces same-day value', !mc1.error && !mc2.error && counts?.length === 1 && counts[0].count === 42, mc2.error?.message)
+const { error: mcOther } = await clubB.c.from('club_member_counts').insert({ club_id: clubARow.id, count: 1 })
+check('club cannot record counts for another club', !!mcOther)
+const { data: adminCounts } = await admin.from('club_member_counts').select('count')
+check('BYU admin reads member counts', adminCounts?.length >= 1)
+
+// storage + club_files
+const pdfBlob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+const flyerPath = `${clubARow.user_id}/flyer-${stamp}.pdf`
+const upFlyer = await clubA.storage.from('flyers').upload(flyerPath, pdfBlob)
+check('club uploads flyer to own folder', !upFlyer.error, upFlyer.error?.message)
+const upWrong = await clubA.storage.from('flyers').upload(`${pu.user.id}/hijack.pdf`, pdfBlob)
+check('club cannot upload into another user folder', !!upWrong.error)
+const upPartner = await partner.c.storage.from('flyers').upload(`${pu.user.id}/x.pdf`, pdfBlob)
+check('partner cannot upload flyers', !!upPartner.error)
+const { error: fileErr } = await clubA.from('club_files').insert({ club_id: clubARow.id, file_type: 'flyer', bucket: 'flyers', storage_path: flyerPath, file_name: 'flyer.pdf', event_id: ev.id })
+check('club records its flyer file', !fileErr, fileErr?.message)
+const { error: fileSpoof } = await clubB.c.from('club_files').insert({ club_id: clubBRow.id, file_type: 'other', bucket: 'flyers', storage_path: flyerPath, file_name: 'x.pdf' })
+check('club cannot register another user\'s storage file', !!fileSpoof)
+const { error: fileEvSpoof } = await clubA.from('club_files').insert({ club_id: clubARow.id, file_type: 'flyer', bucket: 'flyers', storage_path: `${clubARow.user_id}/y.pdf`, file_name: 'y.pdf', event_id: (await service.from('events').insert({ club_id: clubBRow.id, name: 'B event', starts_at: inDays(9), ends_at: inDays(9, 13) }).select().single()).data.id })
+check('club cannot attach files to another club\'s event', !!fileEvSpoof)
+const docPath = `${clubARow.user_id}/constitution-${stamp}.pdf`
+await clubA.storage.from('club-docs').upload(docPath, pdfBlob)
+const signedOwn = await clubA.storage.from('club-docs').createSignedUrl(docPath, 60)
+check('club gets signed URL for own private doc', !!signedOwn.data?.signedUrl)
+const signedOther = await clubB.c.storage.from('club-docs').createSignedUrl(docPath, 60)
+check('other club cannot read private doc', !signedOther.data?.signedUrl)
+const exe = await clubA.storage.from('club-docs').upload(`${clubARow.user_id}/x.exe`, new Blob(['MZ'], { type: 'application/x-msdownload' }))
+check('club-docs rejects disallowed file types', !!exe.error)
+
+// budget
+await service.from('clubs').update({ budget_year_start: '2000-01-01' }).eq('id', clubARow.id)
+await service.from('event_reports').insert({ event_id: past.id, attendees: 35, amount_spent: 180.5 })
+const { data: budget } = await clubA.from('club_budget_summary').select('*')
+check('budget view: remaining = initial − reported spending', budget?.length === 1 && Number(budget[0].remaining) === 1319.5, JSON.stringify(budget?.[0]))
+const { data: bBudget } = await clubB.c.from('club_budget_summary').select('club_id')
+check('budget view only shows own club', bBudget?.length === 1 && bBudget[0].club_id === clubBRow.id)
+const { data: pBudget } = await partner.c.from('club_budget_summary').select('club_id')
+check('partner sees no club budgets', (pBudget ?? []).length === 0)
+const { data: reports } = await clubA.from('event_reports').select('attendees')
+check('club reads own event reports', reports?.length === 1)
+const { error: repIns } = await clubA.from('event_reports').insert({ event_id: ev.id, attendees: 1 })
+check('club cannot write reports yet (Phase 4)', !!repIns)
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

@@ -7,7 +7,7 @@ partners find clubs to sponsor. See [`SPEC.md`](SPEC.md) for the full spec and
 **Stack:** React + TypeScript + Vite + Tailwind CSS · Supabase (Postgres, Auth, Storage,
 Edge Functions) · Resend (email) · GitHub Pages via GitHub Actions.
 
-**Status:** Phase 1 (auth & roles) complete.
+**Status:** Phase 2 (club core) complete.
 
 ## Repository layout
 
@@ -191,6 +191,43 @@ It's safe to re-run; starter rows are matched by name + state rather than duplic
 
 ---
 
+## Updating after a new phase
+
+Each phase may add migrations or functions. After merging a phase into `main`:
+
+```bash
+git pull
+```
+
+```bash
+npx supabase db push
+```
+
+Phase 2 added one migration (`20261113000000_club_core.sql`: events, files, member counts,
+to-dos, the `flyers` and `club-docs` storage buckets) and no new functions or secrets.
+
+## How to test Phase 2 (club dashboard)
+
+Log in as a club (or sign up one at a participating university), then:
+
+1. **Budget:** the dashboard shows "Budget remaining"; click **How is this calculated?** to see
+   annual budget − reported spending. Change the budget or budget-year start in **Settings**.
+   (Spending comes from post-event reports, which arrive in Phase 4, so it's $0 for now.)
+2. **Members:** **Update member count** → enter a number, or upload a roster CSV (one member per
+   row; the header row is detected). Record a few dates to see the chart.
+3. **New event:** fill in the form with no sponsor and no location, upload a flyer, and submit.
+   You land on the event page marked *Pending approval*. Your university's room-booking
+   link/instructions appear when there's no location.
+4. **Dashboard again:** the event is under **Waiting on approval** and on the calendar, and the
+   to-do list has automatic "Find a sponsor…" and "Book a room…" items.
+5. **Edit the event:** add a location and a sponsor → both automatic to-dos are checked off.
+6. **Files:** the flyer is already under Flyers (linked to the event). Upload a constitution
+   (private) and a logo; open and delete files.
+7. **To-dos:** add your own, check them off, show completed.
+8. On a phone, the calendar switches to a list view.
+
+University-admin approval of events comes in Phase 3, and reminder emails in Phase 4.
+
 ## How to test Phase 1 on the live site
 
 1. Log in as your site admin → **Invite a university administrator** → pick a university,
@@ -229,8 +266,9 @@ npm run dev
 - Bootstrap creates `siteadmin@example.com` and `admin@byu.example` (password `password123`)
   and makes BYU participating. Local email confirmation is off.
 - Emails (password reset etc.) appear in the local inbox at <http://127.0.0.1:54324>.
-- `npm run test:rls` runs ~29 security checks (sign-up role rules, who can read/edit what,
-  deactivation, storage folders) against the local database.
+- `npm run test:rls` runs ~65 security checks against the local database: sign-up role rules,
+  who can read/edit what, deactivation, storage folders, event approval/editing rules, files,
+  to-dos, member counts and budgets.
 - `npx supabase db reset` wipes the local DB and re-runs all migrations (then bootstrap again).
 
 ## Day-to-day commands
@@ -272,7 +310,11 @@ Functions automatically. Later phases add `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
   (e.g. a club can't move itself to another university).
 - Clubs see only their club; university admins see only their university's clubs; partners
   can't see club budgets. Deactivated accounts lose access to everything.
-- Storage: users can only write inside `logos/<their user id>/`; images only, 10 MB max.
+- Clubs can't approve their own events, can't create or edit past events, and editing an
+  approved event's details sends it back to pending (enforced by a database trigger).
+- Storage: users can only write inside `<bucket>/<their user id>/`, 10 MB max per file, with
+  per-bucket type limits. `logos` and `flyers` are public; `club-docs` (constitutions, other
+  documents) is private and opened through 10-minute signed links.
 
 ## Changing the accent color
 

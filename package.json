@@ -15,10 +15,17 @@
     "bootstrap:local": "node scripts/local-bootstrap.mjs"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.22",
+    "@fullcalendar/daygrid": "^6.1.22",
+    "@fullcalendar/interaction": "^6.1.22",
+    "@fullcalendar/list": "^6.1.22",
+    "@fullcalendar/react": "^6.1.22",
+    "@fullcalendar/timegrid": "^6.1.22",
     "@supabase/supabase-js": "^2.119.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.18.5"
+    "react-router-dom": "^7.18.5",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

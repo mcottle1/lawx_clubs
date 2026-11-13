@@ -65,7 +65,7 @@ function institutionType(r) {
 }
 
 const rows = parseCsv(decode(readFileSync(file)))
-const header = rows.shift().map((h) => h.replace(/^﻿/, '').trim().toUpperCase())
+const header = rows.shift().map((h) => h.replace(/^\uFEFF/, '').trim().toUpperCase())
 for (const col of ['UNITID', 'INSTNM', 'CITY', 'STABBR']) {
   if (!header.includes(col)) throw new Error(`Column ${col} not found — is this the IPEDS HD (directory) file?`)
 }

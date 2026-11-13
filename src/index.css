@@ -17,3 +17,18 @@
   html { @apply bg-slate-50 text-slate-900 antialiased; }
   :focus-visible { @apply outline-2 outline-offset-2 outline-accent-500; }
 }
+
+/* FullCalendar: use the accent color for its buttons and today highlight. */
+.fc {
+  --fc-button-bg-color: var(--color-accent-600);
+  --fc-button-border-color: var(--color-accent-600);
+  --fc-button-hover-bg-color: var(--color-accent-700);
+  --fc-button-hover-border-color: var(--color-accent-700);
+  --fc-button-active-bg-color: var(--color-accent-700);
+  --fc-button-active-border-color: var(--color-accent-700);
+  --fc-today-bg-color: var(--color-accent-50);
+  font-size: 0.875rem;
+}
+.fc .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; }
+.fc .fc-toolbar-title { font-size: 1.05rem; font-weight: 600; }
+.fc .fc-event { cursor: pointer; }

@@ -79,3 +79,52 @@ Running log of judgment calls made where the spec was ambiguous.
   Rows have a unique `dedupe_key` so scheduled jobs can be idempotent later.
 - **Minimum password length is 8** (Supabase's default is 6) in all forms; consider setting it
   to 8 in Supabase → Authentication → Policies too.
+
+## Phase 2
+
+- **Budget math:** remaining = annual budget − `amount_spent` from event reports for events
+  that start on or after `budget_year_start`. It's computed by the `club_budget_summary` view
+  (with `security_invoker`, so normal RLS applies). Overspending shows as a negative number in
+  red. Clubs change the budget and the budget-year start in Settings.
+- **`event_reports` was created now (read-only)** so the budget math and calendar history are
+  final; submitting reports (and receipts) is Phase 4.
+- **Events are single-day** (date + start time + end time), stored as `timestamptz` plus the
+  browser's IANA time zone so "event date" logic (to-do due dates, Phase 4 jobs) uses the
+  club's local date.
+- **Event rules enforced in the database** (`events_guard` trigger), not just the form: no new
+  events in the past; past events can't be edited or deleted; clubs can't set approval columns
+  (column grants). Editing the name, time, description, location, sponsor or budget of an
+  approved/denied event sends it back to *pending*; changing only the flyer, reminder settings or
+  sponsor notes doesn't. Denied events are resubmitted by editing them.
+- **Choosing a platform partner on an event records them as the sponsor directly** (assumes the
+  club already arranged it). The proposal/acceptance flow, partners seeing events they sponsor,
+  and admin approval of events + partnerships are Phase 3. Event sponsor = a platform partner
+  *or* an outside name, never both (DB constraint).
+- **"Potential sponsor opportunities" is free text for now;** linking to a posted opportunity
+  comes with opportunities in Phase 3.
+- **Reminder settings are stored now; the emails are sent by the Phase 4 daily job.** Default
+  14 days, allowed 1–120. Reminders only apply while the sponsor/location is still missing.
+- **System to-dos are created by a database trigger** (not the daily job) so they appear the
+  moment an event is saved: "Find a sponsor for X" and "Book a room for X" for upcoming events
+  missing those, due on the event date minus the reminder days (or the event date). They're
+  checked off automatically once the gap is filled. Report, follow-up, and closing leftovers after
+  an event passes are Phase 4. Clubs can't create system to-dos; the UI only lets them check
+  them off (delete is offered for manual to-dos only).
+- **Member counts: one value per club per day;** re-entering the same date replaces it. Roster
+  CSVs are counted in the browser (one member per non-empty row, header auto-detected with an
+  override checkbox) and are not stored. A simple membership chart is included now; attendance
+  graphs and chart polish are Phase 6.
+- **Files:** flyers → public `flyers` bucket, logo → public `logos` bucket (the newest logo is the
+  club's logo), constitution/other → private `club-docs` bucket opened with 10-minute signed
+  URLs. Event flyers are recorded in `club_files` linked to the event; replacing a flyer keeps the
+  old one under Files ("past flyers"). Deleting a file clears it from the club logo / an
+  upcoming event that used it. Allowed types: images (+PDF for flyers; +PDF, Word, text, CSV for
+  documents), 10 MB max, enforced by both the form and the bucket.
+- **University admins can already read** their clubs' events, member counts and reports (needed
+  for Phase 3 approvals and the clubs overview). Private club documents are club-only.
+- **Social links** (Instagram, TikTok, website) are edited in club Settings and stored in
+  `clubs.social_links`.
+- **Calendar:** month grid on desktop, list view on phones; colored by approval status, past
+  events gray (with attendance once reported). Events are keyboard-focusable.
+- **Club pages are lazy-loaded** so the calendar/chart libraries don't slow down the landing and
+  login pages.
