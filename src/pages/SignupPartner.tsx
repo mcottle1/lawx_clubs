@@ -5,6 +5,7 @@ import { MIN_PASSWORD_LENGTH, PARTNER_CATEGORIES, US_STATES } from '../lib/const
 import { uploadLogo } from '../lib/storage'
 import { supabase } from '../lib/supabase'
 import { siteRootUrl } from '../lib/urls'
+import { signUpErrorMessage } from '../lib/authErrors'
 import { Alert, Button, Card, Field, inputClass } from '../components/ui'
 
 export default function SignupPartner() {
@@ -57,9 +58,7 @@ export default function SignupPartner() {
     })
     if (error) {
       setBusy(false)
-      setError(/registered|exists/i.test(error.message)
-        ? 'An account with this email already exists. Try logging in.'
-        : 'Sign-up failed. Check the form and try again.')
+      setError(signUpErrorMessage(error))
       return
     }
     if (!data.session) {
