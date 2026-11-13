@@ -37,6 +37,13 @@ scripts/                       IPEDS importer, local bootstrap, RLS test suite
 
 ---
 
+## Prerequisites
+
+- **Node.js 22 or newer** and npm. Check with `node -v`. With nvm, `nvm use` picks the version
+  from `.nvmrc`. (Older Node fails with "native WebSocket not found".)
+- A free [Supabase](https://supabase.com) account.
+- Docker Desktop, only for the optional fully local setup.
+
 ## One-time setup (hosted)
 
 Steps 1–6 were in Phase 0; **steps 7–11 are new in Phase 1.**
