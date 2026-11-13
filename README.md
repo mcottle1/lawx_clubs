@@ -282,8 +282,11 @@ events, opportunities, proposals in every state, conversations, member history a
 in your terminal):
 
 ```bash
-read -s -p "Service role key: " SUPABASE_SERVICE_ROLE_KEY && export SUPABASE_SERVICE_ROLE_KEY
+printf "Service role key: " && read -s SUPABASE_SERVICE_ROLE_KEY && export SUPABASE_SERVICE_ROLE_KEY && echo
 ```
+
+Paste the key and press **Enter** (nothing appears while you paste; this works in the Mac's default
+zsh as well as bash). When you're done, clear it with `unset SUPABASE_SERVICE_ROLE_KEY`.
 
 ```bash
 SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/seed-demo.mjs --yes
