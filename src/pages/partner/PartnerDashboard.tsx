@@ -8,6 +8,9 @@ import ProposalStatusBadge from '../../components/ProposalStatusBadge'
 import { Alert, Button, Card, Field, inputClass, PageHeader } from '../../components/ui'
 import { SUPPORT_TYPES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
+import { brand } from '../../lib/theme'
+import BarMetric from '../../components/charts/BarMetric'
+import StatTile from '../../components/charts/StatTile'
 import type { ConversationListItem, OpportunityCard, PartnerEvent, PartnerEventResult, ProposalDetail } from '../../lib/types'
 import { usePartner } from './PartnerContext'
 
@@ -86,6 +89,7 @@ export default function PartnerDashboard() {
               </ul>
             </Card>
           )}
+          {results.length > 0 && <Results results={results} />}
           <OpportunityFeed />
         </div>
         <div className="space-y-4">
@@ -114,35 +118,17 @@ export default function PartnerDashboard() {
                 events={events.map((e) => ({
                   id: e.id, start: e.starts_at, end: e.ends_at,
                   title: `${e.name} — ${e.club_name}${e.approval_status === 'pending' ? ' (pending approval)' : ''}`,
-                  color: e.approval_status === 'approved' ? '#234bb0' : '#b45309',
+                  color: e.approval_status === 'approved' ? brand.primary() : '#b45309',
                 }))}
               />
             )}
           </Card>
-          <section id="results" aria-labelledby="results-h">
+          {results.length === 0 && (
             <Card>
-              <h2 id="results-h" className="font-medium">Results from events you sponsored</h2>
-              {results.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Attendance and offers redeemed appear here once clubs submit their post-event reports.</p>
-              ) : (
-                <>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {results.reduce((s, r) => s + r.attendees, 0)} students reached · {results.reduce((s, r) => s + (r.offers_redeemed ?? 0), 0)} offers redeemed
-                  </p>
-                  <ul className="mt-2 divide-y divide-slate-100 text-sm">
-                    {results.map((r) => (
-                      <li key={r.event_id} className="py-2">
-                        <p className="font-medium">{r.event_name}</p>
-                        <p className="text-xs text-slate-500">{r.club_name} · {new Date(r.starts_at).toLocaleDateString()}</p>
-                        <p className="mt-1">{r.attendees} attended{r.offers_redeemed !== null && ` · ${r.offers_redeemed} offers redeemed`}</p>
-                        {r.notes && <p className="mt-1 text-xs text-slate-600">“{r.notes}”</p>}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
+              <h2 className="font-medium">Results</h2>
+              <p className="mt-2 text-sm text-slate-500">Attendance and offers redeemed from events you sponsor appear here once clubs submit their post-event reports.</p>
             </Card>
-          </section>
+          )}
         </div>
       </div>
     </>
@@ -212,6 +198,20 @@ function OpportunityFeed() {
       </Card>
       {error && <Alert className="mt-3">{error}</Alert>}
       <p className="my-3 text-sm text-slate-600" role="status">{rows === null ? 'Loading…' : `${total} open opportunit${total === 1 ? 'y' : 'ies'}`}</p>
+      {rows && rows.length === 0 && (
+        filters.university || filters.type || filters.from || filters.to ? (
+          <Card>
+            <p className="text-sm text-slate-600">No opportunities match these filters.</p>
+            <Button variant="secondary" className="mt-2 px-3 py-1 text-sm" onClick={() => { setFilters({ university: '', type: '', from: '', to: '' }); setPage(0) }}>Clear filters</Button>
+          </Card>
+        ) : (
+          <Card className="border-dashed text-center">
+            <p className="font-semibold text-accent-900">No open opportunities right now</p>
+            <p className="mt-1 text-sm text-slate-600">Clubs post new ones regularly. Keep your profile complete and “open to sponsorships” on so clubs can find and message you.</p>
+            <Link to="/partner/profile" className="mt-3 inline-block text-sm font-semibold text-accent-700 hover:underline">Review your profile</Link>
+          </Card>
+        )
+      )}
       <ul className="space-y-3">
         {rows?.map((o) => <li key={o.id}><OpportunityCardView o={o} to={`/partner/opportunities/${o.id}`} /></li>)}
       </ul>
@@ -222,6 +222,57 @@ function OpportunityFeed() {
           <Button variant="secondary" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</Button>
         </nav>
       )}
+    </section>
+  )
+}
+
+function Results({ results }: { results: PartnerEventResult[] }) {
+  const rows = [...results].sort((a, b) => a.starts_at.localeCompare(b.starts_at)).slice(-12)
+  const label = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const reached = results.reduce((s, r) => s + r.attendees, 0)
+  const withOffers = results.filter((r) => r.offers_redeemed !== null)
+  const redeemed = withOffers.reduce((s, r) => s + (r.offers_redeemed ?? 0), 0)
+  const reachedWithOffers = withOffers.reduce((s, r) => s + r.attendees, 0)
+  return (
+    <section id="results" aria-labelledby="results-h">
+      <Card>
+        <h2 id="results-h" className="font-medium">Results from events you sponsored</h2>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatTile label="Events reported" value={results.length} />
+          <StatTile label="Students reached" value={reached} />
+          <StatTile label="Offers redeemed" value={redeemed} tone="fresh" />
+          <StatTile label="Redemption rate" value={reachedWithOffers ? `${Math.round((redeemed / reachedWithOffers) * 100)}%` : '—'} tone="pop" />
+        </div>
+        <div className="mt-4 grid gap-6 md:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-medium text-slate-700">Attendance per event</h3>
+            <BarMetric
+              color={brand.primary()}
+              valueLabel="attendees"
+              summary={`Attendance at ${rows.length} sponsored events, ${reached} students in total.`}
+              data={rows.map((r) => ({ label: label(r.starts_at), value: r.attendees, details: [r.event_name, r.club_name] }))}
+            />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-slate-700">Offers redeemed per event</h3>
+            <BarMetric
+              color={brand.fresh()}
+              valueLabel="offers redeemed"
+              summary={`Offers redeemed at ${rows.length} sponsored events, ${redeemed} in total.`}
+              data={rows.map((r) => ({ label: label(r.starts_at), value: r.offers_redeemed ?? 0, details: [r.event_name, r.club_name, ...(r.offers_redeemed === null ? ['(not reported)'] : [])] }))}
+            />
+          </div>
+        </div>
+        <ul className="mt-4 divide-y divide-slate-100 border-t border-slate-100 text-sm">
+          {[...results].slice(0, 5).map((r) => (
+            <li key={r.event_id} className="py-2">
+              <p><span className="font-medium">{r.event_name}</span> <span className="text-xs text-slate-500">· {r.club_name} · {new Date(r.starts_at).toLocaleDateString()}</span></p>
+              <p className="text-slate-700">{r.attendees} attended{r.offers_redeemed !== null && ` · ${r.offers_redeemed} offers redeemed`}</p>
+              {r.notes && <p className="mt-0.5 text-xs text-slate-600">“{r.notes}”</p>}
+            </li>
+          ))}
+        </ul>
+      </Card>
     </section>
   )
 }

@@ -274,3 +274,42 @@ Running log of judgment calls made where the spec was ambiguous.
   (paused web search → resumed → results, daily limits, cost logging, drafts, captions, error
   handling) — not against the real API, since no key was available. The first real run should
   be watched (see README → Optional AI).
+
+## Phase 6
+
+- **Name and brand:** "CampusBridge" everywhere (header, page title, landing page, emails, docs).
+  Logo = a simple bridge mark (SVG, also the favicon). Font: Plus Jakarta Sans from Google Fonts
+  (falls back to the system font if it can't load).
+- **Colors:** indigo primary (`accent`, #4a3ae0) for buttons, links and active states; two bright
+  accents — coral (`pop`, #f0612e/#ff7a4d) for the main calls to action, the active-tab underline
+  and hero highlights, and teal (`fresh`, #0d9488) for positive numbers and the second chart
+  series. Status colors (pending amber, approved green, denied red) are unchanged and never reused
+  as brand colors. Every text/background pair used was checked for WCAG AA contrast (e.g. dark
+  ink on coral buttons 6:1, white on indigo 7:1), and the three brand colors pass a
+  colorblind-safety check as chart colors.
+- **One place for colors:** the tokens at the top of `src/index.css`; charts and the calendar read
+  them at runtime (`src/lib/theme.ts`) instead of hard-coding hex values.
+- **Custom domain:** GitHub Pages stays the host. The deploy workflow builds for the domain root
+  when the repository variable `CUSTOM_DOMAIN` is set, otherwise for `/<repo>/` as before, so
+  nothing changes until it's set up. Recommended address: a subdomain of the already-owned
+  lawxclub.com (one CNAME record, free). Supabase's Site URL/redirects and the `SITE_URL` secret
+  must be updated by hand (README → Custom domain).
+- **Charts:** club dashboard — "Event attendance" (headline numbers: students reached, average per
+  event, cost per attendee; bars per reported event, last 12) next to "Membership over time".
+  Partner dashboard — "Results from events you sponsored" (events reported, students reached,
+  offers redeemed, redemption rate) with **two separate** bar charts (attendance; offers
+  redeemed) rather than one chart with two y-axes. Each chart has a hover tooltip, a text
+  summary for screen readers and a "Show as table" view. Redemption rate = offers redeemed ÷
+  attendance at events where offers were reported.
+- **Demo data** is a script (`scripts/seed-demo.mjs`), not `seed.sql`, so the same data can be
+  loaded locally or into the hosted project (explicit `--yes`), re-created with `--reset`, and
+  removed by deleting the demo users. It uses BYU and the University of Utah; if a university
+  already has a real administrator, that admin is kept. Demo accounts use `@example.com`
+  addresses, and the email helper now skips reserved domains (example.com, .test, …) so demos
+  never send real email. Logos and receipt images are generated as plain colored PNGs.
+- **Empty states:** a new club sees a "Plan your first event" prompt; partners with no open
+  opportunities see guidance (and a "Clear filters" button when filters hide everything);
+  existing empty messages elsewhere were kept.
+- **Mobile pass:** all 31 routes were checked at iPhone SE width (no sideways scrolling, no
+  errors). Tab bars scroll sideways on phones with a fade at the edge as a hint. The club
+  dashboard keeps the order numbers → approvals/to-dos → calendar → charts on phones.

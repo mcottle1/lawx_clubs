@@ -4,14 +4,18 @@ import { Link, type LinkProps } from 'react-router-dom'
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
+type Variant = 'primary' | 'pop' | 'light' | 'secondary' | 'danger' | 'ghost'
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent-600 text-white hover:bg-accent-700 disabled:opacity-60',
-  secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-60',
+  primary: 'bg-accent-600 text-white shadow-sm shadow-accent-600/20 hover:bg-accent-700 disabled:opacity-60',
+  // Bright call-to-action (coral with dark ink, 6:1 contrast) — use sparingly.
+  pop: 'bg-pop-400 text-accent-900 shadow-sm shadow-pop-500/30 hover:bg-pop-500 disabled:opacity-60',
+  // White button for dark backgrounds (e.g. the landing hero).
+  light: 'bg-white text-accent-800 shadow-sm hover:bg-accent-50 disabled:opacity-60',
+  secondary: 'border border-slate-300 bg-white text-slate-800 hover:border-accent-300 hover:bg-accent-50 disabled:opacity-60',
   danger: 'border border-red-300 bg-white text-red-700 hover:bg-red-50 disabled:opacity-60',
   ghost: 'text-accent-700 hover:bg-accent-50 disabled:opacity-60',
 }
-const buttonBase = 'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors'
+const buttonBase = 'inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors'
 
 export function Button({
   variant = 'primary',
@@ -27,7 +31,7 @@ export function ButtonLink({ variant = 'primary', className, ...props }: LinkPro
 }
 
 export const inputClass =
-  'block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 ' +
+  'block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 ' +
   'focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100 disabled:bg-slate-100'
 
 /** Label + control + hint. `children` receives the generated id for the control. */
@@ -71,21 +75,21 @@ export function Alert({
     warning: 'border-amber-200 bg-amber-50 text-amber-900',
   }[kind]
   return (
-    <div role={kind === 'error' ? 'alert' : 'status'} className={cx('rounded-md border px-3 py-2 text-sm', styles, className)}>
+    <div role={kind === 'error' ? 'alert' : 'status'} className={cx('rounded-lg border px-3 py-2 text-sm', styles, className)}>
       {children}
     </div>
   )
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx('rounded-lg border border-slate-200 bg-white p-5 shadow-sm', className)}>{children}</div>
+  return <div className={cx('rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm shadow-accent-900/5', className)}>{children}</div>
 }
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-accent-900">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
       </div>
       {actions && <div className="flex gap-2">{actions}</div>}

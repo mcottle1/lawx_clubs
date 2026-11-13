@@ -8,6 +8,7 @@ import BudgetCard from './dashboard/BudgetCard'
 import ClubCalendar from './dashboard/ClubCalendar'
 import FilesSummary from './dashboard/FilesSummary'
 import MembersCard from './dashboard/MembersCard'
+import AttendanceChart from './dashboard/AttendanceChart'
 import MembershipChart from './dashboard/MembershipChart'
 import PendingApprovals from './dashboard/PendingApprovals'
 import TodoList from './dashboard/TodoList'
@@ -60,24 +61,41 @@ export default function ClubDashboard() {
         <ButtonLink to="/club/partnerships" variant="secondary">Find sponsors</ButtonLink>
         <ButtonLink to="/club/events/new">New event</ButtonLink>
       </>} />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
+      {/* Desktop: numbers on top-left, sidebar on the right spanning both rows, calendar + charts below.
+          Phone: numbers, then approvals/to-dos, then calendar + charts. Row 1 only takes the numbers' height. */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:grid-rows-[auto_1fr]">
+        <div className="grid gap-4 self-start sm:grid-cols-2 lg:col-span-2">
           <BudgetCard budget={budget} />
           <MembersCard clubId={club.id} counts={counts} onSaved={() => void loadCounts()} />
         </div>
-        <div className="lg:row-span-3 space-y-4">
+        <div className="space-y-4 lg:row-span-2">
           <PendingApprovals events={events} proposals={proposals} unread={unread} />
           <TodoList clubId={club.id} todos={todos} onChange={loadTodos} />
           <ReceiptsCard receipts={receipts} />
           <FilesSummary files={files} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="space-y-4 self-start lg:col-span-2">
+          {events.length === 0 && <FirstEvent />}
           <ClubCalendar events={events} reports={reports} />
-        </div>
-        <div className="lg:col-span-2">
-          <MembershipChart counts={counts} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <AttendanceChart events={events} reports={reports} />
+            <MembershipChart counts={counts} />
+          </div>
         </div>
       </div>
     </>
+  )
+}
+
+/** Shown to a brand-new club with no events yet. */
+function FirstEvent() {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-dashed border-accent-300 bg-accent-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="font-bold text-accent-900">Plan your first event</h2>
+        <p className="text-sm text-slate-600">Add an event to get it approved, find a sponsor, and start tracking attendance.</p>
+      </div>
+      <ButtonLink to="/club/events/new" variant="pop">Create an event</ButtonLink>
+    </div>
   )
 }

@@ -28,7 +28,7 @@ export default function Partnerships() {
             aria-selected={tab === t.key}
             aria-controls={`panel-${t.key}`}
             onClick={() => setParams({ tab: t.key })}
-            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${tab === t.key ? 'bg-accent-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'}`}
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${tab === t.key ? 'bg-accent-600 font-semibold text-white shadow-sm' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-accent-50 hover:ring-accent-200'}`}
           >
             {t.label}
           </button>

@@ -2,11 +2,13 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import listPlugin from '@fullcalendar/list'
 import { useNavigate } from 'react-router-dom'
+import { brand } from '../../../lib/theme'
 import type { ClubEvent, EventReport } from '../../../lib/types'
 import { Card } from '../../../components/ui'
 
+// Approved events use the brand color (from index.css); status colors stay semantic.
 const COLORS = {
-  approved: '#234bb0', // matches --color-accent-600
+  get approved() { return brand.primary() },
   pending: '#b45309',
   denied: '#b91c1c',
   past: '#64748b',

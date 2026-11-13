@@ -1,13 +1,14 @@
-# Law Club Manager (lawx_clubs)
+# CampusBridge (repo: lawx_clubs)
 
-Prototype site that helps university clubs manage budgets, events and sponsors, and helps
-partners find clubs to sponsor. See [`SPEC.md`](SPEC.md) for the full spec and
+CampusBridge is a prototype site that helps university clubs manage budgets, events and
+sponsors, helps partners find clubs to sponsor, and lets university administrators approve
+events and process reimbursements. See [`SPEC.md`](SPEC.md) for the full spec and
 [`ASSUMPTIONS.md`](ASSUMPTIONS.md) for decisions made along the way.
 
 **Stack:** React + TypeScript + Vite + Tailwind CSS · Supabase (Postgres, Auth, Storage,
 Edge Functions) · Resend (email) · GitHub Pages via GitHub Actions.
 
-**Status:** Phase 5 (suggestions and drafting — rules and templates, optional AI) complete.
+**Status:** All phases (0–6) complete. Try it with the [demo data](#demo-data).
 
 ## Repository layout
 
@@ -18,12 +19,12 @@ src/                           React app (HashRouter, so deep links work on Page
   lib/                         Supabase client, constants, types, upload helpers
   pages/                       Route components (one folder per role)
   components/                  Shared UI
-  index.css                    Tailwind + theme tokens (accent color lives here)
+  index.css                    Tailwind + brand color tokens (change the colors here)
 supabase/
   config.toml                  Supabase CLI config (local dev, auth, function settings)
   migrations/                  SQL migrations — the source of truth for the schema
   functions/                   Edge Functions (server code that needs secret keys)
-scripts/                       IPEDS importer, local bootstrap, RLS test suite
+scripts/                       Demo data, IPEDS importer, local bootstrap, test suites
 ```
 
 ## Accounts and roles
@@ -81,8 +82,10 @@ Re-run `db push` whenever new files appear in `supabase/migrations/`.
 
 Supabase dashboard → **Authentication → URL Configuration**:
 
-- **Site URL:** `https://mcottle1.github.io/lawx_clubs/`
+- **Site URL:** `https://mcottle1.github.io/lawx_clubs/` (or your custom domain — see
+  **Custom domain** below)
 - **Redirect URLs:** `https://mcottle1.github.io/lawx_clubs/**` and `http://localhost:5173/**`
+  (plus `https://your-domain/**` if you use one)
 
 ### 5. Local environment variables
 
@@ -147,7 +150,7 @@ shows), Resend only sends *to your own Resend account email*, from `onboarding@r
 Once a domain is verified:
 
 ```bash
-npx supabase secrets set EMAIL_FROM="Law Club Manager <noreply@yourdomain.com>"
+npx supabase secrets set EMAIL_FROM="CampusBridge <noreply@yourdomain.com>"
 ```
 
 If email isn't set up (or fails), the site-admin page still shows the invite link once so you
@@ -224,6 +227,101 @@ npx supabase functions deploy
   formula, and an `ai_usage` log) and one function, `ai`. **Nothing to set up** unless you want
   the optional AI features — see **Optional AI** below. Without it, everything in Phase 5 works and
   costs nothing.
+
+- **Phase 6** added no migrations or secrets. It renames the site to **CampusBridge**, adds the
+  new colors, charts and the demo-data script, and lets the site run on your own domain. Two
+  optional follow-ups: rename the email sender (`npx supabase secrets set EMAIL_FROM="CampusBridge
+  <noreply@lawxclub.com>"`) and set up a **custom domain** (below). Redeploy functions once
+  (`npx supabase functions deploy`) so emails use the new name.
+
+## Custom domain
+
+By default the site is at `https://mcottle1.github.io/lawx_clubs/`. To give people a cleaner link
+you can share (e.g. `https://app.lawxclub.com`), point a domain you own at GitHub Pages. GitHub
+then serves the site there and automatically redirects the old github.io link.
+
+**Pick the address.** Easiest and free: a **subdomain of lawxclub.com**, which you already own
+(e.g. `app.lawxclub.com` or `campusbridge.lawxclub.com`). This doesn't affect your email setup.
+You could also buy a brand-new domain (e.g. a `campusbridge` name, usually about $10–15/year) —
+the steps are the same.
+
+1. **DNS** (at the company where you bought lawxclub.com → DNS settings), add one record:
+   - Type **CNAME**, name **`app`** (the part before `.lawxclub.com`), value **`mcottle1.github.io`**.
+   - (Using a whole domain instead of a subdomain? Add four **A** records for `@` pointing to
+     `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`.)
+2. **GitHub → Settings → Pages → Custom domain:** enter `app.lawxclub.com` → **Save**. Wait for
+   the DNS check to turn green (minutes, occasionally up to a day), then tick **Enforce HTTPS**.
+3. **GitHub → Settings → Secrets and variables → Actions → Variables:** add **`CUSTOM_DOMAIN`** =
+   `app.lawxclub.com`. (This makes the build serve from `/` instead of `/lawx_clubs/`.)
+4. **Actions → Deploy to GitHub Pages → Run workflow.**
+5. **Supabase → Authentication → URL Configuration:** set **Site URL** to
+   `https://app.lawxclub.com/` and add `https://app.lawxclub.com/**` to **Redirect URLs** (keep
+   the github.io one until you've switched).
+6. Make emailed links (invites, reminders) use the new address:
+
+```bash
+npx supabase secrets set SITE_URL=https://app.lawxclub.com/
+```
+
+7. Open `https://app.lawxclub.com`, log in, and send that link to anyone.
+
+> Optional but recommended: verify the domain with GitHub (your profile **Settings → Pages → Add
+> a domain**, then add the TXT record it shows) so nobody else can claim it on GitHub.
+> On a free GitHub plan the repository must stay public for Pages to work.
+
+## Demo data
+
+`scripts/seed-demo.mjs` fills the site with realistic data so every dashboard and chart has
+something to show: **Brigham Young University** and **University of Utah** (each with an
+administrator), **3 clubs**, **4 partners**, past events with reports and receipts, upcoming
+events, opportunities, proposals in every state, conversations, member history and to-dos.
+
+**Locally** (after `npx supabase start`): `npm run seed:demo`
+
+**On your hosted project** (service-role key from Supabase → Project Settings → API; paste it only
+in your terminal):
+
+```bash
+read -s -p "Service role key: " SUPABASE_SERVICE_ROLE_KEY && export SUPABASE_SERVICE_ROLE_KEY
+```
+
+```bash
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/seed-demo.mjs --yes
+```
+
+Re-running needs `--reset`, which deletes the demo accounts (and everything they own) and creates
+them again. If a university already has a real administrator, the script keeps it and doesn't
+create a demo admin there.
+
+**Demo logins** — password for all: `campusbridge-demo`
+
+| Who | Email | Good for trying |
+| --- | --- | --- |
+| BYU administrator | `demo-admin-byu@example.com` | Approvals (an event + partnership), receipts queue, clubs overview |
+| University of Utah administrator | `demo-admin-utah@example.com` | A receipt waiting for review |
+| Moot Court Society (BYU) | `demo-club-moot@example.com` | Full dashboard and charts, a proposal to accept, unread message |
+| Women in Law (BYU) | `demo-club-wil@example.com` | A report that's due, a partnership waiting on the university |
+| Public Interest Law Society (Utah) | `demo-club-pils@example.com` | A smaller club at another university |
+| Summit Bar Review (partner) | `demo-partner-summit@example.com` | Results charts, open opportunities, a pending proposal |
+| Wasatch Legal Partners (partner) | `demo-partner-wasatch@example.com` | Sponsored events calendar |
+| Cougar Town Catering (partner) | `demo-partner-cougar@example.com` | A declined proposal |
+| LexiCode (partner) | `demo-partner-lexicode@example.com` | A partnership waiting on approval |
+
+Demo accounts use `@example.com` addresses; the site never actually sends email to them. Remove
+the demo data any time by deleting those users in Supabase → Authentication.
+
+## How to test Phase 6 (branding, charts, polish)
+
+1. Open the site: the **CampusBridge** name, bridge logo and new colors (indigo with coral and
+   teal accents) appear everywhere, including the browser tab icon.
+2. Load the demo data, then log in as **Moot Court Society**: the dashboard shows **Event
+   attendance** (headline numbers + a bar per event; hover a bar for details, or **Show as
+   table**) next to **Membership over time**.
+3. Log in as **Summit Bar Review**: **Results from events you sponsored** shows events reported,
+   students reached, offers redeemed, redemption rate, and a chart for each.
+4. On your phone: every page fits the screen; the tab bar scrolls sideways.
+5. A brand-new club sees a "Plan your first event" prompt; partners with no opportunities see a
+   friendly empty state.
 
 ## Optional AI (Phase 5)
 
@@ -484,6 +582,7 @@ npm run dev
 | `npm run test:rls` | (Local only) Row Level Security test suite |
 | `npm run test:jobs` | (Local only) daily-job checks (needs `CRON_SECRET` in `supabase/functions/.env`) |
 | `npm test` | Unit tests for the partner-matching rules, ask formula and templates (no database needed) |
+| `npm run seed:demo` | Demo data (local; see **Demo data** for hosted) |
 
 `/#/status` (linked in the footer) confirms the app can reach Supabase.
 
@@ -498,6 +597,7 @@ npm run dev
 | `RESEND_API_KEY` | Supabase function secret | **Yes** | Sending email |
 | `EMAIL_FROM` | Supabase function secret | No | Sender, once a domain is verified |
 | `CRON_SECRET` | Supabase function secret **and** GitHub Actions secret (same value) | **Yes** | Lets the daily workflow call `run-daily-jobs` |
+| `CUSTOM_DOMAIN` | GitHub Actions variable (optional) | No | Your domain, e.g. `app.lawxclub.com`; builds the site for the domain root |
 | `ANTHROPIC_API_KEY` | Supabase function secret (optional) | **Yes** | Turns on the optional AI features |
 | `ANTHROPIC_MODEL` | Supabase function secret (optional) | No | AI model, default `claude-opus-5-5` |
 | `AI_DAILY_LIMIT_SEARCH` / `AI_DAILY_LIMIT_DRAFT` | Supabase function secrets (optional) | No | Per-club AI requests per 24 h (defaults 10 / 30) |
@@ -532,6 +632,10 @@ Functions automatically.
   documents) is private and opened through 10-minute signed links. `receipts` is private too:
   only the club and its university's admin can open a receipt.
 
-## Changing the accent color
+## Changing the colors
 
-Edit the `--color-accent-*` values at the top of `src/index.css`.
+All brand colors are tokens at the top of `src/index.css`: `--color-accent-*` (indigo, the main
+color for buttons, links and active states), `--color-pop-*` (coral, bright highlights) and
+`--color-fresh-*` (teal, the second bright accent). Charts and the calendar read the same tokens,
+so changing them there updates the whole site. If you change them, keep text readable (dark text
+on the coral buttons, white text on indigo).

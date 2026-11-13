@@ -31,7 +31,9 @@ jobs:
           # Public values only (see README → "GitHub repository settings").
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # With a custom domain (repo variable CUSTOM_DOMAIN, e.g. app.example.com) the site
+          # lives at the domain root; otherwise at https://<user>.github.io/<repo>/.
+          VITE_BASE_PATH: ${{ vars.CUSTOM_DOMAIN != '' && '/' || format('/{0}/', github.event.repository.name) }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

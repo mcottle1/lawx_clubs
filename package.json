@@ -14,7 +14,8 @@
     "test:rls": "node scripts/test-rls.mjs",
     "bootstrap:local": "node scripts/local-bootstrap.mjs",
     "test:jobs": "node scripts/test-daily-jobs.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.22",

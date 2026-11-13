@@ -27,11 +27,13 @@ export async function sendEmail(db: SupabaseClient, input: EmailInput): Promise<
     if (data) return 'skipped'
   }
 
-  const apiKey = Deno.env.get('RESEND_API_KEY')
-  const from = Deno.env.get('EMAIL_FROM') ?? 'Law Club Manager <onboarding@resend.dev>'
+  // Demo/test accounts use reserved domains (example.com, *.test, ...): never actually send to them.
+  const reserved = /@(example\.(com|org|net)|[^@\s]+\.(example|test|invalid|localhost))$/i.test(input.to)
+  const apiKey = reserved ? undefined : Deno.env.get('RESEND_API_KEY')
+  const from = Deno.env.get('EMAIL_FROM') ?? 'CampusBridge <onboarding@resend.dev>'
   let status: EmailStatus = 'skipped'
   let providerId: string | null = null
-  let error: string | null = apiKey ? null : 'RESEND_API_KEY not set'
+  let error: string | null = reserved ? 'reserved demo/test address' : apiKey ? null : 'RESEND_API_KEY not set'
 
   if (apiKey) {
     try {

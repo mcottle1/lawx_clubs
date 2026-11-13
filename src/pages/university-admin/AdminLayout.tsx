@@ -21,11 +21,11 @@ export default function AdminLayout() {
   return (
     <>
       <PageHeader title={uni || 'Your university'} subtitle="University club administrator" />
-      <nav aria-label="Administrator" className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200 text-sm">
+      <nav aria-label="Administrator" className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200 text-sm max-sm:pr-8 max-sm:[mask-image:linear-gradient(to_right,black_80%,transparent)]">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}
             className={({ isActive }) => 'whitespace-nowrap border-b-2 px-3 py-2 ' +
-              (isActive ? 'border-accent-600 font-medium text-accent-700' : 'border-transparent text-slate-600 hover:text-slate-900')}>
+              (isActive ? 'border-pop-500 font-semibold text-accent-800' : 'border-transparent text-slate-600 hover:border-accent-200 hover:text-accent-800')}>
             {t.label}
           </NavLink>
         ))}

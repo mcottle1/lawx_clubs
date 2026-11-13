@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         to, template: 'new_message', relatedId: id,
         dedupeKey: `message:${id}:${side === 'club' ? 'partner' : 'club'}:${today()}`,
         subject: `New message from ${from}: ${c.subject}`,
-        text: `${from} wrote:\n\n${preview}\n\nReply on Law Club Manager:\n${link(route)}\n`,
+        text: `${from} wrote:\n\n${preview}\n\nReply on CampusBridge:\n${link(route)}\n`,
       })
       return json({ status })
     }

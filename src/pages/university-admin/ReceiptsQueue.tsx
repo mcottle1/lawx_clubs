@@ -57,7 +57,7 @@ export default function ReceiptsQueue() {
       <div role="tablist" aria-label="Receipt status" className="mb-4 flex gap-2">
         {FILTERS.map((f) => (
           <button key={f.key} role="tab" aria-selected={filter === f.key} onClick={() => setFilter(f.key)}
-            className={`rounded-full px-3 py-1.5 text-sm ${filter === f.key ? 'bg-accent-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'}`}>
+            className={`rounded-full px-3 py-1.5 text-sm ${filter === f.key ? 'bg-accent-600 font-semibold text-white shadow-sm' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-accent-50 hover:ring-accent-200'}`}>
             {f.label}
           </button>
         ))}

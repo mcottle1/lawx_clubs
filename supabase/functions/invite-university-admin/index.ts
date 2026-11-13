@@ -52,9 +52,9 @@ Deno.serve(async (req) => {
     template: 'university_admin_invite',
     dedupeKey: `admin_invite:${invite.id}`,
     relatedId: invite.id,
-    subject: `You're invited to manage ${uni.name} on Law Club Manager`,
+    subject: `You're invited to manage ${uni.name} on CampusBridge`,
     text:
-      `You've been invited to be the club administrator for ${uni.name} on Law Club Manager.\n\n` +
+      `You've been invited to be the club administrator for ${uni.name} on CampusBridge.\n\n` +
       `Set your password and finish setup here (link expires in 7 days):\n${link}\n`,
   })
 

@@ -1,4 +1,4 @@
-# Build Prompt: Law Club Manager (working name)
+# Build Prompt: CampusBridge (formerly "Law Club Manager")
 
 ## Context
 
@@ -191,9 +191,10 @@ Make the jobs **idempotent**: check `email_log` so running the job twice never s
 
 - Responsive design; club officers will often use this on their phones.
 - Accessible forms (labels, keyboard navigation, sufficient contrast).
-- Clean, professional look; neutral colors with one accent color I can change in one place.
+- Clean, professional look with a distinctive brand: an indigo primary color plus at most two brighter accents (coral and teal), all changeable in one place.
 - Validate file uploads (type and size limits, e.g., 10 MB).
 - Seed script with demo data: 2 universities, 3 clubs, 4 partners, 1 admin per university, and past and future events with reports, so every dashboard and graph has something to show.
+- The site can be served from a custom domain (a shareable link without the GitHub username), with GitHub Pages remaining the host.
 - Demo login credentials listed in the README.
 
 ---
@@ -228,3 +229,8 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   with daily per-club limits. Affected: Tech stack → suggestions and drafting; Club flow 3.2
   (partner finder), 3.3 (opportunity drafting and caption), 5.2 (social media recommendations);
   How to work → Phase 5.
+- **2026-11-13 — Phase 6 additions.** The site is named **CampusBridge**. The look moves from
+  "neutral + one accent" to an indigo brand color with two brighter accents (coral, teal), still
+  defined in one place. The site can run on a custom domain (e.g. a subdomain of a domain we own)
+  so the shared link doesn't include the GitHub username. Affected: title, Non-functional
+  requirements.
