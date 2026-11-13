@@ -9,6 +9,8 @@ import { addReceipt, RECEIPT_ACCEPT, receiptUrl, validateReceipt } from '../../.
 import { supabase } from '../../../lib/supabase'
 import type { ClubEvent, EventReport as Report, Partner, Receipt } from '../../../lib/types'
 import { useClub } from '../ClubContext'
+import SocialPosts from '../../../components/suggest/SocialPosts'
+import { recapPosts } from '../../../lib/suggest/templates'
 
 type EventRow = ClubEvent & { partners: Pick<Partner, 'id' | 'name' | 'email'> | null }
 interface NewReceipt { key: number; file: File | null; amount: string; description: string }
@@ -16,7 +18,7 @@ interface NewReceipt { key: number; file: File | null; amount: string; descripti
 /** /club/events/:id/report — post-event report + receipts, then the follow-up checklist. */
 export default function EventReport() {
   const { id } = useParams()
-  const { club, userId } = useClub()
+  const { club, userId, universityName } = useClub()
   const [event, setEvent] = useState<EventRow | null | undefined>(undefined)
   const [report, setReport] = useState<Report | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -106,7 +108,15 @@ export default function EventReport() {
         {report && (
           <Card>
             <h2 className="font-medium">Social media recap</h2>
-            <p className="mt-1 text-sm text-slate-500">AI-drafted post ideas recapping the event are coming in the next phase.</p>
+            <p className="mb-3 mt-1 text-sm text-slate-600">Post ideas filled in with your numbers — copy one, add a photo, and tag your sponsor.</p>
+            <SocialPosts
+              kind="recap"
+              id={event.id}
+              templates={recapPosts({
+                clubName: club.name, universityName, eventName: event.name, attendees: report.attendees,
+                sponsorName, offersRedeemed: report.offers_redeemed, notes: report.notes,
+              })}
+            />
           </Card>
         )}
 

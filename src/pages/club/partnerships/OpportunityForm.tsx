@@ -8,6 +8,7 @@ import { validateImage } from '../../../lib/storage'
 import { supabase } from '../../../lib/supabase'
 import type { ClubEvent, Opportunity, SupportType } from '../../../lib/types'
 import { useClub } from '../ClubContext'
+import DraftHelper from './DraftHelper'
 
 /** /club/opportunities/new[?event=id] and /club/opportunities/:id/edit */
 export default function OpportunityForm() {
@@ -78,6 +79,17 @@ export default function OpportunityForm() {
       <PageHeader title={existing ? 'Edit opportunity' : 'Post a sponsorship opportunity'} subtitle="Describe what a sponsor gets. Open opportunities show up on partners' dashboards." />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <Alert>{error}</Alert>}
+        <DraftHelper
+          supportType={f.support_type}
+          event={events.find((e) => e.id === f.event_id) ?? null}
+          current={{ title: f.title, description: f.description }}
+          onDraft={(d) => setF((prev) => ({
+            ...prev,
+            ...(d.title !== undefined ? { title: d.title } : {}),
+            ...(d.description !== undefined ? { description: d.description } : {}),
+            ...(d.amount !== undefined ? { amount_sought: String(d.amount) } : {}),
+          }))}
+        />
         <Card className="space-y-4">
           <Field label="Title" required>
             {(fid) => <input id={fid} className={inputClass} maxLength={200} placeholder="e.g. Sponsor lunch at our Bar Prep panel" value={f.title} onChange={set('title')} />}
@@ -106,7 +118,6 @@ export default function OpportunityForm() {
             {(fid) => <textarea id={fid} rows={6} maxLength={5000} className={inputClass} value={f.description} onChange={set('description')} />}
           </Field>
           <LogoInput label="Photo" currentUrl={publicUrl('flyers', existing?.photo_path)} onChange={setPhoto} />
-          <p className="text-xs text-slate-500">AI help drafting the description, ask amount and a social caption is coming in a later phase.</p>
         </Card>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Link to="/club/partnerships?tab=opportunities" className="px-4 py-2 text-center text-sm text-slate-600 hover:underline">Cancel</Link>

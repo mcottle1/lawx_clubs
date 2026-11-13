@@ -22,13 +22,16 @@ export default function ClubLayout() {
   const [info, setInfo] = useState<Omit<ClubInfo, 'refreshClub'> | null | undefined>(undefined)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('clubs').select('*, universities(name)').eq('user_id', userId).maybeSingle()
+    const { data } = await supabase.from('clubs').select('*, universities(name, city, state)').eq('user_id', userId).maybeSingle()
     if (!data) return setInfo(null)
-    const { universities, ...club } = data as Club & { universities: { name: string } | null }
+    const { universities, ...club } = data as Club & { universities: { name: string; city: string | null; state: string | null } | null }
     const { data: admin } = await supabase
       .from('university_admins').select('scheduling_url, scheduling_instructions')
       .eq('university_id', club.university_id).maybeSingle()
-    setInfo({ club, universityName: universities?.name ?? '', scheduling: admin ?? null, userId })
+    setInfo({
+      club, universityName: universities?.name ?? '', universityCity: universities?.city ?? null,
+      universityState: universities?.state ?? null, scheduling: admin ?? null, userId,
+    })
   }, [userId])
 
   useEffect(() => { void load() }, [load])

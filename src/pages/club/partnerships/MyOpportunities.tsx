@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import Modal from '../../../components/Modal'
+import SocialPosts from '../../../components/suggest/SocialPosts'
+import { opportunityCaptions } from '../../../lib/suggest/templates'
 import { Link } from 'react-router-dom'
 import { Alert, Button, ButtonLink, Card } from '../../../components/ui'
 import { supportLabel } from '../../../lib/constants'
@@ -14,14 +17,15 @@ const STATUS: Record<OpportunityStatus, string> = {
 }
 
 export default function MyOpportunities() {
-  const { club } = useClub()
-  const [items, setItems] = useState<(Opportunity & { events: { name: string } | null })[] | null>(null)
+  const { club, universityName } = useClub()
+  const [items, setItems] = useState<(Opportunity & { events: { name: string; starts_at: string } | null })[] | null>(null)
+  const [captionFor, setCaptionFor] = useState<(Opportunity & { events: { name: string; starts_at: string } | null }) | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('opportunities').select('*, events(name)').eq('club_id', club.id).order('created_at', { ascending: false })
-    setItems((data as (Opportunity & { events: { name: string } | null })[]) ?? [])
+    const { data } = await supabase.from('opportunities').select('*, events(name, starts_at)').eq('club_id', club.id).order('created_at', { ascending: false })
+    setItems((data as (Opportunity & { events: { name: string; starts_at: string } | null })[]) ?? [])
   }, [club.id])
   useEffect(() => { void load() }, [load])
 
@@ -65,6 +69,7 @@ export default function MyOpportunities() {
                           <Button variant="secondary" className="px-3 py-1" onClick={() => { void navigator.clipboard.writeText(shareLink(o.id)); setCopied(o.id) }}>
                             {copied === o.id ? 'Link copied' : 'Copy share link'}
                           </Button>
+                          <Button variant="secondary" className="px-3 py-1" onClick={() => setCaptionFor(o)}>Social caption</Button>
                           <Button variant="ghost" className="px-3 py-1" onClick={() => void setStatus(o, 'closed')}>Close</Button>
                         </>
                       ) : (
@@ -78,6 +83,19 @@ export default function MyOpportunities() {
           })}
         </ul>
       )}
+      <Modal open={!!captionFor} onClose={() => setCaptionFor(null)} title="Social media caption">
+        {captionFor && (
+          <SocialPosts
+            kind="opportunity"
+            id={captionFor.id}
+            templates={opportunityCaptions({
+              clubName: club.name, universityName, title: captionFor.title, eventName: captionFor.events?.name ?? null,
+              eventDate: captionFor.events ? new Date(captionFor.events.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
+              headcount: null, link: shareLink(captionFor.id),
+            })}
+          />
+        )}
+      </Modal>
     </>
   )
 }

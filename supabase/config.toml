@@ -431,3 +431,7 @@ verify_jwt = true
 # Called by the daily GitHub Actions workflow; protected by the CRON_SECRET header instead of a login.
 [functions.run-daily-jobs]
 verify_jwt = false
+
+# Optional AI features (only active when ANTHROPIC_API_KEY is set).
+[functions.ai]
+verify_jwt = true

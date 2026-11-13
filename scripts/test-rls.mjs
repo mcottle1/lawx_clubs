@@ -421,5 +421,27 @@ check('partner results do not include spending', mineRes && !('amount_spent' in 
 const { data: bResults } = await clubB.c.from('partner_event_results').select('event_id')
 check('non-partners see no partner results', (bResults ?? []).length === 0)
 
+
+// =============================================================================
+// Phase 5: suggestion helpers return aggregates only
+// =============================================================================
+console.log('\n--- Phase 5 ---')
+const { data: stats, error: statsErr } = await clubA.rpc('partner_match_stats')
+const mineStats = stats?.find((r) => r.partner_id === partnerRow.id)
+check('club gets partner sponsorship counts', !statsErr && mineStats?.with_club >= 1 && mineStats?.at_university >= 1, statsErr?.message ?? JSON.stringify(mineStats))
+check('stats are aggregates only (no club or event details)', mineStats && Object.keys(mineStats).sort().join(',') === 'at_university,last_sponsored_at,partner_id,with_club')
+const { data: bStats } = await clubB.c.rpc('partner_match_stats')
+check('stats are relative to the calling club', (bStats ?? []).find((r) => r.partner_id === partnerRow.id)?.with_club === 0)
+const { data: pStats } = await partnerC.rpc('partner_match_stats')
+check('partners get no stats', (pStats ?? []).length === 0)
+const { error: anonStats } = await anon.rpc('partner_match_stats')
+check('logged-out users cannot call stats', !!anonStats)
+const { data: amt, error: amtErr } = await clubA.rpc('proposal_amount_stats', { p_support_type: 'funding' })
+check('club gets a median-amount summary', !amtErr && amt?.length === 1 && ['university', 'site', 'none'].includes(amt[0].scope), amtErr?.message)
+const { data: pAmt } = await partnerC.rpc('proposal_amount_stats', { p_support_type: 'funding' })
+check('partners get no amount summary', (pAmt ?? []).length === 0)
+const { data: aiRows } = await partnerC.from('ai_usage').select('id')
+check('partners cannot read AI usage', (aiRows ?? []).length === 0)
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

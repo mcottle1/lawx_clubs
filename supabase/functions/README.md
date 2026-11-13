@@ -16,6 +16,6 @@ every send to `email_log` and skips duplicates by `dedupe_key`).
 `notify` also handles `report_submitted` (results to the sponsor, receipts alert to the admin) and
 `receipt_reviewed` (status email to the club).
 
-Coming later: AI functions (Phase 5).
+| `ai` | Logged-in club | **Optional.** Only active when `ANTHROPIC_API_KEY` is set: `status`, `find_partners` (Claude + web search), `draft_opportunity`, `social_posts`; per-club daily limits; logs to `ai_usage` |
 
 Secrets are set with `npx supabase secrets set NAME=value` — never committed.

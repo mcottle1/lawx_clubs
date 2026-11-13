@@ -220,3 +220,57 @@ Running log of judgment calls made where the spec was ambiguous.
 - **Approval catch-up:** if the browser never called `notify` for a pending event (closed tab,
   network error), the daily job sends the admin's "approval needed" email for events that have been
   pending more than an hour with no such email logged.
+
+## Phase 5
+
+- **Scope change (agreed 2026-11-13, recorded in SPEC.md → Revisions):** every suggestion feature
+  works without AI using rules and templates, at $0. AI is an optional upgrade that appears only
+  when `ANTHROPIC_API_KEY` is set. With no key, AI buttons are hidden (the `ai` function reports
+  `enabled: false`) and nothing calls Anthropic.
+- **Partner finder rules** (all visible to the club as plain-English reasons): +30 same state as
+  the university, +20 same city, +30 business category fits the event (keyword lists for lunch/
+  food → catering, bar/exam → bar prep, firm/career/panel → law firm, tech/AI → legal tech,
+  service/pro bono → nonprofit), +25 sponsored this club before, +15 sponsored at this
+  university, up to +15 for words shared between the event and the partner's offer. Only partners
+  open to sponsorships are shown; with an event/keywords selected, zero-score partners are hidden.
+  The weights live in `src/lib/suggest/partnerMatch.ts` and are easy to tune.
+- **Cross-club numbers come from aggregate-only database functions:** `partner_match_stats()`
+  (per-partner sponsorship counts at your university / with your club) and
+  `proposal_amount_stats()` (median approved amount for a kind of support, at your university,
+  falling back to the whole site). Neither reveals other clubs' rows.
+- **Outside businesses without AI = search links** (Google Maps and web search pre-filled with the
+  business type and the university's city). OpenStreetMap lookups were considered and skipped
+  for now (patchy data, usage-policy limits); they could be added later.
+- **Ask-amount formula:** expected attendees × cost per attendee (median of the club's past
+  reports; defaults $12 food, $10 funding, $5 in-kind, $8 other); use the event budget if higher;
+  blend with what sponsors actually gave for that support type (50% weight with 3+ examples, 25%
+  with 1–2); round to $25 (minimum $50). Speaker requests suggest $0 (ask for lunch/travel
+  instead). Every step is shown under "How we got this". Expected attendees default to the
+  club's average past attendance, else its latest member count, else 30.
+- **Templates:** opportunity title/description built from the club, event, headcount, support
+  type and chosen perks (present N minutes, logo on flyer, social shout-out, table, member email,
+  thank-you); three share captions with hashtags and the public link; three post-event recap
+  ideas using attendance, sponsor and offers redeemed. Clubs edit everything before using it.
+- **Optional AI design:** one Edge Function (`ai`) with `find_partners` (Claude + web search,
+  max 5 searches, located near the university, excludes partners already on the site, returns
+  name/website/city/category/reason through a strict tool call; results without a valid http(s)
+  website are dropped), `draft_opportunity` (rewrites title/description and proposes an ask with
+  a reason, given the formula's answer), and `social_posts` (opportunity captions or recaps).
+  Each sends the club's context automatically (description, university, budget, last year of
+  events with attendance/spending/notes/sponsors).
+- **AI model and settings:** default `claude-opus-5-5` (changeable with `ANTHROPIC_MODEL`),
+  effort `medium` for web search and `low` for drafting, with the server-side refusal fallback
+  turned on for models that support it. If the AI declines a request, the club sees a message and
+  the template result stays.
+- **AI limits and logging:** per club, 10 searches and 30 drafts per rolling 24 hours (secrets
+  `AI_DAILY_LIMIT_SEARCH` / `AI_DAILY_LIMIT_DRAFT`); requests rejected before reaching the AI don't
+  count. Every request is logged in `ai_usage` with tokens, web searches and an estimated cost
+  (prices in the function: Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50 per million
+  tokens, web search $10 per 1,000).
+- **Safety:** web content and club-entered text are passed as information with an instruction to
+  ignore any instructions inside them; AI output is shown as plain text and external links open
+  with `rel="noreferrer nofollow"`. AI answers are labeled "AI" with a reminder to check them.
+- **Testing:** the AI code path was tested end to end against a local mock of the Anthropic API
+  (paused web search → resumed → results, daily limits, cost logging, drafts, captions, error
+  handling) — not against the real API, since no key was available. The first real run should
+  be watched (see README → Optional AI).

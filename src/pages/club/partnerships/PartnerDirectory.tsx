@@ -93,11 +93,11 @@ export default function PartnerDirectory() {
   )
 }
 
-function ReachOutForm({ partner }: { partner: Partner }) {
+export function ReachOutForm({ partner, eventId }: { partner: Partner; eventId?: string }) {
   const navigate = useNavigate()
   const { club } = useClub()
   const [events, setEvents] = useState<ClubEvent[]>([])
-  const [eventId, setEventId] = useState('')
+  const [selectedEvent, setEventId] = useState(eventId ?? '')
   const [subject, setSubject] = useState('Sponsorship opportunity')
   const [body, setBody] = useState(`Hi ${partner.name},\n\nWe're ${club.name} and we'd love to talk about partnering on an upcoming event.\n\nThanks!`)
   const [error, setError] = useState<string | null>(null)
@@ -114,7 +114,7 @@ function ReachOutForm({ partner }: { partner: Partner }) {
     setBusy(true)
     const { data, error } = await supabase.rpc('start_conversation', {
       p_partner_id: partner.id, p_subject: subject.trim() || 'Sponsorship opportunity', p_body: body.trim(),
-      p_event_id: eventId || null,
+      p_event_id: selectedEvent || null,
     })
     setBusy(false)
     if (error) return setError(error.message)
@@ -130,7 +130,7 @@ function ReachOutForm({ partner }: { partner: Partner }) {
       </Field>
       <Field label="About an event (optional)" hint="Lets the partner send a proposal tied to that event.">
         {(id) => (
-          <select id={id} className={inputClass} value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <select id={id} className={inputClass} value={selectedEvent} onChange={(e) => setEventId(e.target.value)}>
             <option value="">No specific event</option>
             {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name} — {new Date(ev.starts_at).toLocaleDateString()}</option>)}
           </select>

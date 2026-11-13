@@ -2,10 +2,12 @@ import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/ui'
 import MyOpportunities from './MyOpportunities'
 import PartnerDirectory from './PartnerDirectory'
+import PartnerFinder from './PartnerFinder'
 import ProposalsInbox from './ProposalsInbox'
 
 const TABS = [
-  { key: 'partners', label: 'Find partners' },
+  { key: 'finder', label: 'Partner finder' },
+  { key: 'partners', label: 'All partners' },
   { key: 'opportunities', label: 'Your opportunities' },
   { key: 'proposals', label: 'Proposals' },
 ] as const
@@ -13,7 +15,7 @@ const TABS = [
 /** /club/partnerships — directory, posted opportunities, incoming proposals. */
 export default function Partnerships() {
   const [params, setParams] = useSearchParams()
-  const tab = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'partners'
+  const tab = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'finder'
   return (
     <>
       <PageHeader title="Partnerships" subtitle="Find sponsors, post what you can offer, and respond to proposals." />
@@ -33,6 +35,7 @@ export default function Partnerships() {
         ))}
       </div>
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === 'finder' && <PartnerFinder />}
         {tab === 'partners' && <PartnerDirectory />}
         {tab === 'opportunities' && <MyOpportunities />}
         {tab === 'proposals' && <ProposalsInbox />}

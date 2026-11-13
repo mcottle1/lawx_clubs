@@ -20,7 +20,7 @@ This is a **prototype**. Keep hosting costs at or near $0, favor simple and well
   - **Row Level Security (RLS) on every table.** The frontend only ever uses the public anon key, so RLS is the real security layer. Never put a service-role key or API key in frontend code.
 - **Email:** Resend (free tier), called from Supabase Edge Functions.
 - **Scheduled jobs:** a GitHub Actions workflow on a daily cron schedule that calls a Supabase Edge Function (`run-daily-jobs`) with a shared secret. That function sends reminders and post-event report requests.
-- **AI:** Anthropic Claude API, called only from an Edge Function. Put the model name in an environment variable so I can change it. Turn on Claude's web search tool for the "find local partners" feature so that it suggests real businesses instead of invented ones.
+- **Suggestions and drafting (rules and templates first, AI optional):** every "smart" feature (partner suggestions, opportunity drafting, ask amounts, social captions, post-event recaps) works without AI, using matching rules, formulas and templates, at no cost. **AI is an optional upgrade:** when an Anthropic API key is configured, the same screens offer "Improve with AI" / "Search the web with AI". AI uses the Anthropic Claude API, called only from an Edge Function, with the model name in an environment variable so I can change it, daily per-club limits, and usage logging. When AI is on, turn on Claude's web search tool for the "find local partners" feature so that it suggests real businesses instead of invented ones. With no key, AI buttons don't appear and nothing costs money.
 - **UI libraries:** FullCalendar (React) for the interactive calendar; Recharts for graphs.
 
 ---
@@ -74,15 +74,17 @@ We want the club to be able to:
       2. A short description of the partner's focus/opportunity willingness
       3. A button to reach out to the partner (sends an on-site message and an email notification to the partner; also show a `mailto:` fallback)
       4. Filters by category and location
-   2. An AI chat space where the club can:
-      1. Input an event they are trying to plan and get back a list of local businesses or firms that might be willing to partner/sponsor if the club reached out
+   2. A partner finder where the club can:
+      1. Input an event they are trying to plan and get back a list of partners that might be willing to sponsor if the club reached out
       2. Use background club information automatically (club description, university location, past events, past partners, budget) so the club doesn't have to start from zero each time
-      3. See partners already on the platform first, then outside businesses found through web search, with a one-line reason why each might be a fit and a link to their website
-   3. A **"Create a sponsorship opportunity"** tool (from the solution sketch). The club describes what they want to offer partners (optionally tied to an event), uploads a photo, and the AI drafts:
-      - a description of the opportunity, which the club can edit before posting
-      - a suggested amount to ask for, based on the event budget, the club's remaining budget, and amounts from past partnerships
+      3. See partners already on the platform first, ranked by matching rules (location, category vs. the event, past sponsorships, what they offer), each with a one-line reason why it might be a fit
+      4. Find outside businesses through ready-made search links (e.g. a map search for relevant businesses near the university)
+      5. **Optional AI:** when AI is enabled, "Search the web with AI" also returns outside businesses found through web search, each with a one-line reason and a link to their website
+   3. A **"Create a sponsorship opportunity"** tool (from the solution sketch). The club describes what they want to offer partners (optionally tied to an event), uploads a photo, and the site drafts:
+      - a description of the opportunity from a template, which the club can edit before posting (optionally rewritten by AI)
+      - a suggested amount to ask for, from a formula based on the event budget, the club's remaining budget, past event costs and amounts from past partnerships, with the math shown (optionally refined by AI)
 
-      Posted opportunities appear on the partner dashboard. The club can also copy a share link and an AI-suggested social media caption to post on Instagram/TikTok.
+      Posted opportunities appear on the partner dashboard. The club can also copy a share link and a suggested social media caption (from templates, or AI-written when enabled) to post on Instagram/TikTok.
    4. A list of the club's own posted opportunities and incoming partner proposals, with Accept/Decline buttons
 
 4. **Access to a page that is used for creating events**
@@ -115,7 +117,7 @@ We want the club to be able to:
       2. Report info also integrates with the interactive calendar, so clubs can look back on past events and review the notes and approximate cost when planning in future years.
       3. If the report isn't submitted, send one reminder 3 days later and keep a to-do item on the dashboard until it's done.
    2. After the report is submitted, show the club:
-      - Social media recommendations (AI-drafted post ideas recapping the event)
+      - Social media recommendations (post ideas recapping the event, filled in from templates with the report's numbers, or AI-drafted when enabled)
       - A partner follow-up checklist (e.g., send a thank-you note, share the attendance numbers, ask about future events)
 
 ---
@@ -211,7 +213,18 @@ Build in phases. **After each phase, stop and give me:** what you built, anythin
 3. **Phase 2 — Club core:** dashboard, files, member counts, event creation, calendar, to-dos.
 4. **Phase 3 — Partnerships:** partner profiles and dashboard, opportunities directory, posting opportunities, proposals and messaging, admin approvals.
 5. **Phase 4 — Automation:** daily job, reminder emails, post-event report flow, receipts queue.
-6. **Phase 5 — AI:** partner-finder chat, opportunity description and ask-amount drafting, social media and follow-up suggestions.
+6. **Phase 5 — Suggestions and drafting (rules and templates, optional AI):** rule-based partner finder with search links, opportunity description templates and ask-amount formula, social caption and post-event recap templates; then optional AI versions of each (behind an API key, with daily per-club limits and usage logging).
 7. **Phase 6 — Metrics and polish:** club and partner graphs, seed data, empty states, mobile pass.
 
 Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTIONS.md`, and keep going rather than stopping to ask, unless the decision would be hard to undo (e.g., schema decisions that affect security).
+
+---
+
+## Revisions
+
+- **2026-11-13 — Phase 5 changed from "AI" to "rules and templates, with optional AI."** To keep
+  the prototype at $0, every suggestion and drafting feature now works without AI. AI (Claude
+  with web search) is an optional upgrade that appears only when an Anthropic API key is set,
+  with daily per-club limits. Affected: Tech stack → suggestions and drafting; Club flow 3.2
+  (partner finder), 3.3 (opportunity drafting and caption), 5.2 (social media recommendations);
+  How to work → Phase 5.

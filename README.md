@@ -7,7 +7,7 @@ partners find clubs to sponsor. See [`SPEC.md`](SPEC.md) for the full spec and
 **Stack:** React + TypeScript + Vite + Tailwind CSS · Supabase (Postgres, Auth, Storage,
 Edge Functions) · Resend (email) · GitHub Pages via GitHub Actions.
 
-**Status:** Phase 4 (automation, reports, receipts) complete.
+**Status:** Phase 5 (suggestions and drafting — rules and templates, optional AI) complete.
 
 ## Repository layout
 
@@ -220,6 +220,89 @@ npx supabase functions deploy
   bookkeeping), a new function `run-daily-jobs`, a new workflow `.github/workflows/daily-jobs.yml`,
   and one new secret, `CRON_SECRET` (set it up once — see **Daily jobs** below).
 
+- **Phase 5** added one migration (two summary functions for the partner finder and ask
+  formula, and an `ai_usage` log) and one function, `ai`. **Nothing to set up** unless you want
+  the optional AI features — see **Optional AI** below. Without it, everything in Phase 5 works and
+  costs nothing.
+
+## Optional AI (Phase 5)
+
+Every suggestion feature works without AI: the partner finder ranks partners with simple rules,
+the opportunity form fills in a template and calculates an ask amount (showing its math), and
+captions and post-event recaps come from templates filled with real numbers. When you add an
+Anthropic API key, the same screens also show **"Search the web with AI"**, **"Improve with AI"**
+and **"Write more with AI"** buttons. Remove the key and the buttons disappear.
+
+**Cost:** pay-as-you-go from prepaid credit. Roughly $0.15–0.30 per AI web search and a few cents
+per draft with the default model (Claude Opus 5.5); about half that with Claude Sonnet 5.5. Each
+club gets 10 AI searches and 30 AI drafts per 24 hours by default.
+
+### Turn it on
+
+1. Go to <https://console.anthropic.com>, create an account (separate from any Claude.ai
+   subscription), add a payment method and **buy a small amount of credit** (e.g. $10). Leave
+   auto-reload off if you want a hard stop when it runs out.
+2. In the Console's billing/limits settings, set a **monthly spend limit** (e.g. $20).
+3. **API Keys → Create key.** Copy it (it's shown once) and store it in Supabase — only paste it
+   into your terminal:
+
+```bash
+npx supabase secrets set ANTHROPIC_API_KEY=paste-your-key-here
+```
+
+4. Deploy the function (if you haven't since Phase 5 was merged):
+
+```bash
+npx supabase functions deploy
+```
+
+5. Log in as a club → **Partnerships → Partner finder**: the "Search the web with AI" button
+   should appear.
+
+### Options (all optional)
+
+Pick a different model (default `claude-opus-5-5`; `claude-sonnet-5-5` costs about half):
+
+```bash
+npx supabase secrets set ANTHROPIC_MODEL=claude-sonnet-5-5
+```
+
+Change the per-club limits (requests per 24 hours):
+
+```bash
+npx supabase secrets set AI_DAILY_LIMIT_SEARCH=5 AI_DAILY_LIMIT_DRAFT=20
+```
+
+**See what AI is costing:** Supabase → Table Editor → `ai_usage` (one row per request, with
+tokens, web searches and an estimated cost), or the usage page in the Anthropic Console.
+
+**Turn it off:** `npx supabase secrets unset ANTHROPIC_API_KEY`. The app goes back to rules and
+templates only.
+
+If credit runs out, clubs see "AI credit has run out" and the non-AI suggestions keep working.
+
+## How to test Phase 5 (suggestions and drafting)
+
+Works with AI off. Have at least two partners that are open to sponsorships (one in your
+university's city with a matching category, e.g. a bar prep company for a "Bar exam kickoff
+lunch") and one upcoming event.
+
+1. **Club → Partnerships → Partner finder:** pick the event. Partners are ranked with reasons
+   ("Located in Provo, UT — same city as your university", "Bar prep — fits an event about bar,
+   exam", "Sponsored your club before"). **Reach out** opens the message form with the event
+   selected. Below, map/web search links look for businesses that aren't on the site yet.
+2. **Event page → Post a sponsorship opportunity → Fill in from template:** the title and
+   description fill in (with your perks), and a **Suggested ask** appears. Open **How we got
+   this** to see the math (past cost per attendee, event budget, what sponsors gave before).
+   **Use this amount** fills in the ask.
+3. After posting: **Your opportunities → Social caption** shows three captions with your share
+   link and Copy buttons.
+4. **A reported event → Edit report & receipts:** the **Social media recap** section has three
+   post ideas with your attendance and sponsor.
+5. **With AI on:** the same screens show the AI buttons. "Search the web with AI" can take up to a
+   minute and lists real businesses with links and a reason; the note under it shows how many AI
+   uses your club has left today.
+
 ## Daily jobs (Phase 4)
 
 Once a day, GitHub Actions calls the `run-daily-jobs` Edge Function, which:
@@ -400,6 +483,7 @@ npm run dev
 | `npm run bootstrap:local` | (Local only) create demo site admin + BYU admin |
 | `npm run test:rls` | (Local only) Row Level Security test suite |
 | `npm run test:jobs` | (Local only) daily-job checks (needs `CRON_SECRET` in `supabase/functions/.env`) |
+| `npm test` | Unit tests for the partner-matching rules, ask formula and templates (no database needed) |
 
 `/#/status` (linked in the footer) confirms the app can reach Supabase.
 
@@ -414,9 +498,12 @@ npm run dev
 | `RESEND_API_KEY` | Supabase function secret | **Yes** | Sending email |
 | `EMAIL_FROM` | Supabase function secret | No | Sender, once a domain is verified |
 | `CRON_SECRET` | Supabase function secret **and** GitHub Actions secret (same value) | **Yes** | Lets the daily workflow call `run-daily-jobs` |
+| `ANTHROPIC_API_KEY` | Supabase function secret (optional) | **Yes** | Turns on the optional AI features |
+| `ANTHROPIC_MODEL` | Supabase function secret (optional) | No | AI model, default `claude-opus-5-5` |
+| `AI_DAILY_LIMIT_SEARCH` / `AI_DAILY_LIMIT_DRAFT` | Supabase function secrets (optional) | No | Per-club AI requests per 24 h (defaults 10 / 30) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are provided to Edge
-Functions automatically. Phase 5 adds `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.
+Functions automatically.
 
 ## Security model
 
@@ -436,6 +523,10 @@ Functions automatically. Phase 5 adds `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.
   include budgets. Proposals, approvals and conversations are created only through database
   functions that check who is calling (e.g. only the club can accept, only that university's
   admin can approve, a deny needs a reason).
+- Optional AI: the Anthropic key lives only in Supabase secrets; only clubs can call the `ai`
+  function, with per-club daily limits; every request is logged in `ai_usage` (clubs see only
+  their own rows). Web pages the AI reads are treated as information, never instructions, and
+  links it returns are shown as plain external links.
 - Storage: users can only write inside `<bucket>/<their user id>/`, 10 MB max per file, with
   per-bucket type limits. `logos` and `flyers` are public; `club-docs` (constitutions, other
   documents) is private and opened through 10-minute signed links. `receipts` is private too:
