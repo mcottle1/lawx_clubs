@@ -1,6 +1,17 @@
 import { createClient, FunctionsHttpError } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL
+// Keep only the origin, e.g. "https://abcd.supabase.co". People often paste the
+// REST endpoint (".../rest/v1/"), which would break every auth/storage call.
+function normalizeUrl(raw: string | undefined): string | undefined {
+  if (!raw) return raw
+  try {
+    return new URL(raw.trim()).origin
+  } catch {
+    return raw
+  }
+}
+
+const url = normalizeUrl(import.meta.env.VITE_SUPABASE_URL)
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 /** True when the Supabase env vars are present. The UI shows a setup hint otherwise. */
