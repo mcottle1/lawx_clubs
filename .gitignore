@@ -31,3 +31,6 @@ supabase/.temp
 supabase/.branches
 supabase/functions/.env
 supabase/functions/.local
+
+# Vite cache
+.vite

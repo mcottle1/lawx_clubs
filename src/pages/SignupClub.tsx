@@ -4,6 +4,7 @@ import { MIN_PASSWORD_LENGTH } from '../lib/constants'
 import { supabase } from '../lib/supabase'
 import type { University } from '../lib/types'
 import { siteRootUrl } from '../lib/urls'
+import { signUpErrorMessage } from '../lib/authErrors'
 import { Alert, Button, Card, Field, inputClass } from '../components/ui'
 
 export default function SignupClub() {
@@ -56,9 +57,7 @@ export default function SignupClub() {
     })
     setBusy(false)
     if (error) {
-      setError(/registered|exists/i.test(error.message)
-        ? 'An account with this email already exists. Try logging in.'
-        : 'Sign-up failed. Check the form and try again.')
+      setError(signUpErrorMessage(error))
       return
     }
     if (data.session) navigate('/club', { replace: true })
