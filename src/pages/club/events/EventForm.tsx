@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PARTNER_CATEGORIES } from '../../../lib/constants'
 import { FILE_RULES, publicUrl, uploadClubFile, validateClubFile } from '../../../lib/files'
 import { browserTimeZone, toDateTimeInputs, todayIso } from '../../../lib/format'
+import { notify } from '../../../lib/notify'
 import { supabase } from '../../../lib/supabase'
 import type { ClubEvent, Partner } from '../../../lib/types'
 import { Alert, Button, Card, Field, inputClass, PageHeader, Spinner } from '../../../components/ui'
@@ -148,6 +149,13 @@ export default function EventForm() {
         const { error } = await supabase.from('events').update({ flyer_path: saved.storage_path }).eq('id', eventId)
         if (error) throw error
       }
+      // Email the university admin when the event (newly or again) needs approval.
+      if (!existing) {
+        notify('event_submitted', eventId!)
+      } else if (existing.approval_status !== 'pending') {
+        const { data: now } = await supabase.from('events').select('approval_status').eq('id', eventId!).single()
+        if (now?.approval_status === 'pending') notify('event_submitted', eventId!)
+      }
       navigate(`/club/events/${eventId}`, { replace: true, state: { saved: editing ? 'updated' : 'created' } })
     } catch (err) {
       setError(friendly((err as Error).message))
@@ -240,7 +248,7 @@ export default function EventForm() {
               hint="Sent to your club email with a link to partnership opportunities, if there's still no sponsor."
             />
           )}
-          <Field label="Potential sponsor opportunities" hint="What you could offer a sponsor (e.g. “10 minutes to present at lunch”). Linking to a posted opportunity arrives with the Partnerships page.">
+          <Field label="Potential sponsor opportunities" hint="What you could offer a sponsor (e.g. “10 minutes to present at lunch”). To post it for partners to see, use “Post a sponsorship opportunity” on the event page.">
             {(fid) => <textarea id={fid} rows={3} maxLength={2000} className={inputClass} value={form.potentialNotes} onChange={text('potentialNotes')} />}
           </Field>
         </Card>

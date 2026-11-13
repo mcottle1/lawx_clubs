@@ -128,3 +128,54 @@ Running log of judgment calls made where the spec was ambiguous.
   events gray (with attendance once reported). Events are keyboard-focusable.
 - **Club pages are lazy-loaded** so the calendar/chart libraries don't slow down the landing and
   login pages.
+
+## Phase 3
+
+- **Proposal lifecycle:** `pending_club` → (club) `declined` | `pending_admin` → (university
+  admin) `approved` | `denied`; the partner can `withdraw` until it's final. Only one open
+  proposal per partner per opportunity (or per conversation when there's no opportunity).
+- **Accepting a proposal tied to an event makes that partner the event's sponsor** and, because
+  the sponsor changed, sends an approved event back to *pending*. The admin then sees one
+  "Event + partnership" card and the decision applies to both ("approved along with it").
+  Denying it takes the partner back off the event and reopens the opportunity. Proposals not
+  tied to an event (or whose event is already decided) show as separate "Partnership" cards.
+- **One sponsor per event** (unchanged from Phase 2). Accepting a proposal for an event that
+  already lists a sponsor is blocked with a message telling the club to remove it first.
+  Multiple sponsors per event / bundles are future work; `proposals.bundle_id` is reserved.
+- **Opportunity statuses:** `open` → `filled` automatically when a proposal is accepted (back to
+  `open` if that partnership is denied or withdrawn); clubs can close/reopen manually.
+- **"Category" filter on the partner dashboard = the kind of support a club is asking for**
+  (food, funding, in-kind, speaker, other), stored as `opportunities.support_type`. The spec
+  didn't say what "category" meant for opportunities; partners already have a business category.
+- **Partners see clubs only through limited views** (`opportunity_cards`, `partner_events`,
+  `conversation_list`, `proposal_details`) — club name, logo, university, event name/date/
+  location/description — never budgets. These views are owner-privileged with explicit
+  `where` filters (Supabase may flag them as "security definer views"; that's intentional).
+- **Public share link** (`#/o/<id>`) works without logging in via `get_public_opportunity()`,
+  which returns a fixed set of non-sensitive fields and only for *open* opportunities. Partners
+  who open it while logged in go straight to the response form.
+- **Messaging:** one conversation per outreach (club → partner, optionally about an event) or per
+  partner question/proposal on an opportunity. Status changes (accepted, approved, denied,
+  withdrawn) are posted into the conversation as system lines. No realtime: an open thread
+  refreshes every 15 seconds; unread = new messages since that side last opened the thread.
+- **Partners can start conversations only about an open opportunity** (to avoid partners
+  cold-messaging clubs); clubs can message any partner in the directory. Replies are open to
+  both sides.
+- **Emails for actions are sent by the `notify` Edge Function**, which the browser calls right
+  after the action succeeds. It re-checks that the caller performed the action and uses
+  `email_log` dedupe keys, so it can't be used to spam. Message emails are limited to one per
+  thread per recipient per day. If a call is missed (e.g. the browser closes), the in-app state
+  is still correct; the Phase 4 daily job can be extended to sweep missed notifications.
+  Withdrawals don't send email (they appear in the conversation).
+- **Event approval emails:** the admin is emailed when an event is created, when an approved/
+  denied event is edited back to pending, and when a club accepts a proposal (event card or
+  partnership card). The club (and partner, for partnerships) is emailed the decision.
+- **Partner dashboard:** "next steps" are computed in the browser (new opportunities at schools
+  they've sponsored before, unread messages, proposals waiting, profile gaps). Success-metric
+  graphs need post-event reports (Phase 4) and are drawn in Phase 6; a placeholder explains this.
+- **University admin "events this year"** on the Clubs overview = non-denied events since each
+  club's budget-year start.
+- **University admin area** now has tabs: Approvals (default), Clubs, Settings (the Phase 1
+  scheduling form). Pending events whose date already passed are still reviewable and flagged.
+- **Opportunity photos** go in the public `flyers` bucket under the club's folder but are not
+  listed under Club files (they're marketing images, not flyers).

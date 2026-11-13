@@ -7,7 +7,7 @@ partners find clubs to sponsor. See [`SPEC.md`](SPEC.md) for the full spec and
 **Stack:** React + TypeScript + Vite + Tailwind CSS · Supabase (Postgres, Auth, Storage,
 Edge Functions) · Resend (email) · GitHub Pages via GitHub Actions.
 
-**Status:** Phase 2 (club core) complete.
+**Status:** Phase 3 (partnerships) complete.
 
 ## Repository layout
 
@@ -203,8 +203,44 @@ git pull
 npx supabase db push
 ```
 
-Phase 2 added one migration (`20261113000000_club_core.sql`: events, files, member counts,
-to-dos, the `flyers` and `club-docs` storage buckets) and no new functions or secrets.
+Then deploy any new or changed Edge Functions (safe to re-run; deploys all of them):
+
+```bash
+npx supabase functions deploy
+```
+
+- **Phase 2** added one migration (events, files, member counts, to-dos, the `flyers` and
+  `club-docs` buckets).
+- **Phase 3** added one migration (opportunities, conversations/messages, proposals, approval
+  functions) and one function, `notify`, which sends the emails that go with actions (new
+  pending approval, new message, new proposal, accepted/declined, approved/denied). No new
+  secrets: it uses the same `RESEND_API_KEY`, `EMAIL_FROM` and `SITE_URL`.
+
+## How to test Phase 3 (partnerships)
+
+Use three browsers (or one normal + two private windows): a **club**, a **partner** (open to
+sponsorships), and that university's **admin**.
+
+1. **Club → Partnerships → Find partners:** filter by category/state; click **Reach out** on the
+   partner, optionally pick an event, send. (The mailto link is the fallback.)
+2. **Club → an upcoming event → Post a sponsorship opportunity:** title, support needed, ask
+   amount, description, photo. Under **Your opportunities**, **Copy share link** and open it in a
+   logged-out window — the public page shows the opportunity and "Sign up as a partner".
+3. **Partner dashboard:** the opportunity is in the feed (try the University / Support / date
+   filters); **Recent activity** shows the club's message. Open the opportunity → fill in
+   lunches, minutes to present, student offer → **Send proposal**. Reply to the club under
+   **Messages**.
+4. **Club dashboard:** the sidebar shows the proposal and the unread message. **Partnerships →
+   Proposals → Accept.** The partner is now the event's sponsor and the event goes back to
+   *pending* so the university approves both together.
+5. **Admin → Approvals:** the event card says "Event + partnership"; **Review** shows the terms.
+   **Deny** needs a reason; **Approve** approves both. Check **Clubs** for the overview.
+6. **Partner → Proposals** shows *Approved*; the dashboard calendar lists the event.
+7. Repeat with an opportunity that isn't tied to an event — it shows up for the admin as a
+   separate "Partnership" card.
+
+Each step sends an email (or, without `RESEND_API_KEY`, records a "skipped" row in
+`email_log`, which you can check in the Table Editor).
 
 ## How to test Phase 2 (club dashboard)
 
@@ -266,9 +302,9 @@ npm run dev
 - Bootstrap creates `siteadmin@example.com` and `admin@byu.example` (password `password123`)
   and makes BYU participating. Local email confirmation is off.
 - Emails (password reset etc.) appear in the local inbox at <http://127.0.0.1:54324>.
-- `npm run test:rls` runs ~65 security checks against the local database: sign-up role rules,
+- `npm run test:rls` runs ~100 security checks against the local database: sign-up role rules,
   who can read/edit what, deactivation, storage folders, event approval/editing rules, files,
-  to-dos, member counts and budgets.
+  to-dos, member counts, budgets, opportunities, messages, proposals and approvals.
 - `npx supabase db reset` wipes the local DB and re-runs all migrations (then bootstrap again).
 
 ## Day-to-day commands
@@ -312,6 +348,11 @@ Functions automatically. Later phases add `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`
   can't see club budgets. Deactivated accounts lose access to everything.
 - Clubs can't approve their own events, can't create or edit past events, and editing an
   approved event's details sends it back to pending (enforced by a database trigger).
+- Partners never query club or event tables directly: they read limited-column views
+  (`opportunity_cards`, `partner_events`, `conversation_list`, `proposal_details`) that never
+  include budgets. Proposals, approvals and conversations are created only through database
+  functions that check who is calling (e.g. only the club can accept, only that university's
+  admin can approve, a deny needs a reason).
 - Storage: users can only write inside `<bucket>/<their user id>/`, 10 MB max per file, with
   per-bucket type limits. `logos` and `flyers` are public; `club-docs` (constitutions, other
   documents) is private and opened through 10-minute signed links.

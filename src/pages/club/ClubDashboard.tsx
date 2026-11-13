@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, Todo } from '../../lib/types'
+import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Todo } from '../../lib/types'
 import { ButtonLink, PageHeader } from '../../components/ui'
 import { useClub } from './ClubContext'
 import BudgetCard from './dashboard/BudgetCard'
@@ -19,6 +19,8 @@ export default function ClubDashboard() {
   const [reports, setReports] = useState<Map<string, EventReport>>(new Map())
   const [todos, setTodos] = useState<Todo[]>([])
   const [files, setFiles] = useState<ClubFile[]>([])
+  const [proposals, setProposals] = useState<ProposalDetail[]>([])
+  const [unread, setUnread] = useState(0)
 
   const loadCounts = useCallback(async () => {
     const { data } = await supabase.from('club_member_counts').select('*').eq('club_id', club.id).order('recorded_on')
@@ -40,20 +42,27 @@ export default function ClubDashboard() {
       .then(({ data }) => setReports(new Map(((data as EventReport[]) ?? []).map((r) => [r.event_id, r]))))
     supabase.from('club_files').select('*').eq('club_id', club.id)
       .then(({ data }) => setFiles((data as ClubFile[]) ?? []))
+    supabase.from('proposal_details').select('*').in('status', ['pending_club', 'pending_admin'])
+      .then(({ data }) => setProposals((data as ProposalDetail[]) ?? []))
+    supabase.from('conversation_list').select('id', { count: 'exact', head: true }).eq('unread', true)
+      .then(({ count }) => setUnread(count ?? 0))
     void loadCounts()
     void loadTodos()
   }, [club.id, loadCounts, loadTodos])
 
   return (
     <>
-      <PageHeader title={club.name} subtitle={universityName} actions={<ButtonLink to="/club/events/new">New event</ButtonLink>} />
+      <PageHeader title={club.name} subtitle={universityName} actions={<>
+        <ButtonLink to="/club/partnerships" variant="secondary">Find sponsors</ButtonLink>
+        <ButtonLink to="/club/events/new">New event</ButtonLink>
+      </>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
           <BudgetCard budget={budget} />
           <MembersCard clubId={club.id} counts={counts} onSaved={() => void loadCounts()} />
         </div>
         <div className="lg:row-span-3 space-y-4">
-          <PendingApprovals events={events} />
+          <PendingApprovals events={events} proposals={proposals} unread={unread} />
           <TodoList clubId={club.id} todos={todos} onChange={loadTodos} />
           <FilesSummary files={files} />
         </div>

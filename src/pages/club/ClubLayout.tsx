@@ -9,6 +9,8 @@ import { ClubContext, type ClubInfo } from './ClubContext'
 const tabs = [
   { to: '/club', label: 'Dashboard', end: true },
   { to: '/club/events/new', label: 'New event', end: false },
+  { to: '/club/partnerships', label: 'Partnerships', end: false },
+  { to: '/club/messages', label: 'Messages', end: false },
   { to: '/club/files', label: 'Files', end: false },
   { to: '/club/settings', label: 'Settings', end: false },
 ]

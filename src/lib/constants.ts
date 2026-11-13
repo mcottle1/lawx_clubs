@@ -52,3 +52,14 @@ export const US_STATES: [string, string][] = [
   ['SD', 'South Dakota'], ['TN', 'Tennessee'], ['TX', 'Texas'], ['UT', 'Utah'], ['VT', 'Vermont'],
   ['VA', 'Virginia'], ['WA', 'Washington'], ['WV', 'West Virginia'], ['WI', 'Wisconsin'], ['WY', 'Wyoming'],
 ]
+
+export const SUPPORT_TYPES: { value: import('./types').SupportType; label: string }[] = [
+  { value: 'food', label: 'Food / catering' },
+  { value: 'funding', label: 'Funding' },
+  { value: 'in_kind', label: 'In-kind (supplies, prizes, swag)' },
+  { value: 'speaker', label: 'Speaker / presentation' },
+  { value: 'other', label: 'Other' },
+]
+
+export const supportLabel = (v: string) => SUPPORT_TYPES.find((s) => s.value === v)?.label ?? v
+export const categoryLabel = (v: string) => PARTNER_CATEGORIES.find((c) => c.value === v)?.label ?? v

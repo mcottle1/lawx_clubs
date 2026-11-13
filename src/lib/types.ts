@@ -134,3 +134,112 @@ export interface BudgetSummary {
   reported_events: number
   remaining: number
 }
+
+export type SupportType = 'food' | 'funding' | 'in_kind' | 'speaker' | 'other'
+export type OpportunityStatus = 'open' | 'filled' | 'closed'
+export type ProposalStatus = 'pending_club' | 'declined' | 'pending_admin' | 'approved' | 'denied' | 'withdrawn'
+
+export interface Opportunity {
+  id: string
+  club_id: string
+  event_id: string | null
+  title: string
+  description: string
+  support_type: SupportType
+  amount_sought: number | null
+  photo_path: string | null
+  status: OpportunityStatus
+  created_at: string
+}
+
+/** Row of the opportunity_cards view (no budgets). */
+export interface OpportunityCard extends Opportunity {
+  club_name: string
+  club_logo_path: string | null
+  university_id: string
+  university_name: string
+  university_city: string | null
+  university_state: string | null
+  event_name: string | null
+  event_starts_at: string | null
+  event_time_zone: string | null
+}
+
+/** Row of the proposal_details view. */
+export interface ProposalDetail {
+  id: string
+  club_id: string
+  partner_id: string
+  opportunity_id: string | null
+  event_id: string | null
+  conversation_id: string | null
+  headcount: number | null
+  amount: number | null
+  in_kind: string | null
+  student_offer: string | null
+  pitch_minutes: number | null
+  message: string | null
+  status: ProposalStatus
+  denial_reason: string | null
+  created_at: string
+  updated_at: string
+  partner_name: string
+  partner_logo_path: string | null
+  partner_email: string
+  partner_category: PartnerCategory
+  club_name: string
+  university_id: string
+  university_name: string
+  opportunity_title: string | null
+  event_name: string | null
+  event_starts_at: string | null
+  event_time_zone: string | null
+  event_approval_status: ApprovalStatus | null
+}
+
+export interface ConversationListItem {
+  id: string
+  subject: string
+  club_id: string
+  partner_id: string
+  event_id: string | null
+  opportunity_id: string | null
+  started_by: 'club' | 'partner'
+  created_at: string
+  last_message_at: string
+  club_name: string
+  club_email: string
+  club_logo_path: string | null
+  university_name: string
+  partner_name: string
+  partner_email: string
+  partner_logo_path: string | null
+  unread: boolean
+  last_message: string | null
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  sender_user_id: string | null
+  sender_role: 'club' | 'partner' | 'system'
+  body: string
+  created_at: string
+}
+
+/** Row of the partner_events view (no budget). */
+export interface PartnerEvent {
+  id: string
+  name: string
+  starts_at: string
+  ends_at: string
+  time_zone: string
+  description: string
+  location: string | null
+  flyer_path: string | null
+  approval_status: ApprovalStatus
+  partner_id: string | null
+  club_id: string
+  club_name: string
+  university_name: string
+}

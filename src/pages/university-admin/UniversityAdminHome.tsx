@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabase'
 import type { UniversityAdmin } from '../../lib/types'
-import { Alert, Button, Card, Field, inputClass, PageHeader, Spinner } from '../../components/ui'
+import { Alert, Button, Card, Field, inputClass, Spinner } from '../../components/ui'
 
 type AdminRow = UniversityAdmin & { universities: { name: string } | null }
 
@@ -54,7 +54,6 @@ export default function UniversityAdminHome() {
 
   return (
     <>
-      <PageHeader title={row.universities?.name ?? 'Your university'} subtitle="University club administrator" />
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <h2 className="text-sm font-medium text-slate-600">Clubs registered</h2>
@@ -78,7 +77,7 @@ export default function UniversityAdminHome() {
           </form>
         </Card>
       </div>
-      <Alert kind="info" className="mt-6">Event approvals and the receipts queue arrive in later phases.</Alert>
+      <Alert kind="info" className="mt-6">The receipts and reimbursement queue arrives in a later phase.</Alert>
     </>
   )
 }

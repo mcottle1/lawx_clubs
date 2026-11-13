@@ -16,7 +16,8 @@ const anon = client()
 const { data: unis } = await anon.from('universities').select('id, name, is_participating')
 check('anon can list universities', unis?.length >= 50, `(${unis?.length})`)
 const byu = unis.find((u) => u.name === 'Brigham Young University')
-const utah = unis.find((u) => u.name === 'University of Utah')
+// Any university that isn't participating (earlier test runs may have activated some).
+const utah = unis.find((u) => !u.is_participating && u.name !== 'Utah State University')
 check('BYU is participating', byu?.is_participating === true)
 
 // --- sign-ups ---------------------------------------------------------------
@@ -216,6 +217,132 @@ const { data: reports } = await clubA.from('event_reports').select('attendees')
 check('club reads own event reports', reports?.length === 1)
 const { error: repIns } = await clubA.from('event_reports').insert({ event_id: ev.id, attendees: 1 })
 check('club cannot write reports yet (Phase 4)', !!repIns)
+
+
+// =============================================================================
+// Phase 3: opportunities, conversations, proposals, approvals
+// =============================================================================
+console.log('\n--- Phase 3 ---')
+const partnerC = partner.c
+const { data: partnerRow } = await partnerC.from('partners').select('id').eq('email', `partner${stamp}@example.com`).single()
+
+// A second university with its own admin (idempotent across runs).
+const { data: usu } = await anon.from('universities').select('id').eq('name', 'Utah State University').single()
+const inv2 = await site.functions.invoke('invite-university-admin', { body: { university_id: usu.id, email: 'admin@usu.example' } })
+if (!inv2.error) {
+  await site.functions.invoke('accept-admin-invite', { body: { action: 'accept', token: inv2.data.link.split('/').pop(), password: 'password123', scheduling_instructions: 'Email rooms@usu.example' } })
+}
+const usuAdmin = client()
+await usuAdmin.auth.signInWithPassword({ email: 'admin@usu.example', password: 'password123' })
+
+// opportunities
+await service.from('events').update({ approval_status: 'approved', partner_id: null, outside_sponsor_name: null }).eq('id', ev.id)
+const { data: opp, error: oppErr } = await clubA.from('opportunities').insert({
+  club_id: clubARow.id, event_id: ev.id, title: 'Sponsor our Speaker Lunch', description: 'Lunch for 40 students',
+  support_type: 'food', amount_sought: 400,
+}).select().single()
+check('club posts an opportunity for its event', !oppErr, oppErr?.message)
+const { data: bEvent } = await service.from('events').select('id').eq('club_id', clubBRow.id).limit(1).single()
+const { error: oppBad } = await clubA.from('opportunities').insert({ club_id: clubARow.id, event_id: bEvent.id, title: 'x' })
+check('club cannot link an opportunity to another club\'s event', !!oppBad)
+const { data: cards } = await partnerC.from('opportunity_cards').select('*').eq('id', opp.id)
+check('partner sees open opportunity with club + university names', cards?.length === 1 && cards[0].club_name && cards[0].university_name)
+check('opportunity card exposes no budget fields', cards?.[0] && !('initial_budget' in cards[0]) && !('budget' in cards[0]))
+const { data: bCards } = await clubB.c.from('opportunity_cards').select('id').eq('id', opp.id)
+check('another club cannot see the opportunity', (bCards ?? []).length === 0)
+const { error: oppUpd } = await partnerC.from('opportunities').update({ title: 'hijack' }).eq('id', opp.id)
+const { data: oppAfter } = await clubA.from('opportunities').select('title').eq('id', opp.id).single()
+check('partner cannot edit opportunities', oppAfter.title !== 'hijack', oppUpd?.message ?? '')
+const { data: pub } = await anon.rpc('get_public_opportunity', { p_id: opp.id })
+check('public share page shows open opportunity (no login)', pub?.title === 'Sponsor our Speaker Lunch' && !('budget' in (pub ?? {})))
+
+// conversations + messages
+const { data: convId, error: convErr } = await clubA.rpc('start_conversation', { p_partner_id: partnerRow.id, p_subject: 'Lunch?', p_body: 'Would you sponsor our lunch?' })
+check('club starts a conversation with a partner', !convErr && !!convId, convErr?.message)
+const { data: inbox } = await partnerC.from('conversation_list').select('*').eq('id', convId)
+check('partner sees the new conversation as unread', inbox?.[0]?.unread === true && inbox[0].club_name)
+const { data: pu2 } = await partnerC.auth.getUser()
+const { error: replyErr } = await partnerC.from('messages').insert({ conversation_id: convId, sender_user_id: pu2.user.id, sender_role: 'partner', body: 'Happy to talk!' })
+check('partner replies in the conversation', !replyErr, replyErr?.message)
+const { error: spoofRole } = await partnerC.from('messages').insert({ conversation_id: convId, sender_user_id: pu2.user.id, sender_role: 'club', body: 'fake' })
+check('partner cannot post as the club', !!spoofRole)
+const { data: bUser } = await clubB.c.auth.getUser()
+const { error: outsider } = await clubB.c.from('messages').insert({ conversation_id: convId, sender_user_id: bUser.user.id, sender_role: 'club', body: 'hi' })
+check('outsider cannot post in the conversation', !!outsider)
+const { data: bMsgs } = await clubB.c.from('messages').select('id').eq('conversation_id', convId)
+check('outsider cannot read the conversation', (bMsgs ?? []).length === 0)
+await partnerC.rpc('mark_conversation_read', { p_conversation_id: convId })
+const { data: inbox2 } = await partnerC.from('conversation_list').select('unread').eq('id', convId).single()
+check('mark read clears unread', inbox2?.unread === false)
+
+// proposals
+const { error: emptyProp } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp.id, p_message: 'just saying hi' })
+check('proposal must offer something', !!emptyProp)
+const { data: propId, error: propErr } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp.id, p_headcount: 40, p_pitch_minutes: 10, p_student_offer: '15% off', p_message: 'We can do it.' })
+check('partner submits a proposal', !propErr && !!propId, propErr?.message)
+const { error: dupProp } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp.id, p_amount: 100 })
+check('no duplicate open proposals', !!dupProp)
+const { data: clubProps } = await clubA.from('proposal_details').select('*').eq('id', propId)
+check('club sees proposal (pending_club) with partner name', clubProps?.[0]?.status === 'pending_club' && clubProps[0].partner_name === 'Test Firm')
+const { error: pResp } = await partnerC.rpc('respond_to_proposal', { p_proposal_id: propId, p_accept: true })
+check('partner cannot accept its own proposal', !!pResp)
+const { error: bResp } = await clubB.c.rpc('respond_to_proposal', { p_proposal_id: propId, p_accept: true })
+check('another club cannot accept the proposal', !!bResp)
+const { error: propIns } = await partnerC.from('proposals').insert({ club_id: clubARow.id, partner_id: partnerRow.id, amount: 5 })
+check('proposals cannot be inserted directly', !!propIns)
+const { data: accStatus, error: accErr } = await clubA.rpc('respond_to_proposal', { p_proposal_id: propId, p_accept: true })
+check('club accepts → pending_admin', !accErr && accStatus === 'pending_admin', accErr?.message)
+const { data: evAfter } = await clubA.from('events').select('partner_id, approval_status').eq('id', ev.id).single()
+check('accepting puts partner on the event and sends it back for approval', evAfter.partner_id === partnerRow.id && evAfter.approval_status === 'pending')
+const { data: oppFilled } = await clubA.from('opportunities').select('status').eq('id', opp.id).single()
+check('opportunity marked filled', oppFilled.status === 'filled')
+const { data: pEvents } = await partnerC.from('partner_events').select('*')
+check('partner sees the sponsored event (no budget column)', pEvents?.some((e) => e.id === ev.id) && !('budget' in pEvents[0]))
+
+// approvals
+const { error: clubReview } = await clubA.rpc('review_event', { p_event_id: ev.id, p_approve: true })
+check('club cannot approve its own event', !!clubReview)
+const { error: usuReview } = await usuAdmin.rpc('review_event', { p_event_id: ev.id, p_approve: true })
+check('another university\'s admin cannot review it', !!usuReview)
+const { data: usuProps } = await usuAdmin.from('proposal_details').select('id').eq('id', propId)
+check('another university\'s admin cannot see the proposal', (usuProps ?? []).length === 0)
+const { error: noReason } = await admin.rpc('review_event', { p_event_id: ev.id, p_approve: false, p_reason: '  ' })
+check('deny requires a reason', !!noReason)
+const { error: apprErr } = await admin.rpc('review_event', { p_event_id: ev.id, p_approve: true })
+const { data: evApproved } = await clubA.from('events').select('approval_status').eq('id', ev.id).single()
+const { data: propApproved } = await clubA.from('proposals').select('status').eq('id', propId).single()
+check('approving the event approves the partnership with it', !apprErr && evApproved.approval_status === 'approved' && propApproved.status === 'approved', apprErr?.message)
+const { error: again } = await admin.rpc('review_event', { p_event_id: ev.id, p_approve: true })
+check('already-reviewed event cannot be reviewed again', !!again)
+
+// standalone partnership (opportunity without an event) → deny
+const { data: opp2 } = await clubA.from('opportunities').insert({ club_id: clubARow.id, title: 'Year-long sponsor', support_type: 'funding', amount_sought: 1000 }).select().single()
+const { data: prop2 } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp2.id, p_amount: 500 })
+await clubA.rpc('respond_to_proposal', { p_proposal_id: prop2, p_accept: true })
+const { error: denyErr } = await admin.rpc('review_proposal', { p_proposal_id: prop2, p_approve: false, p_reason: 'Conflicts with university sponsor policy' })
+const { data: prop2After } = await partnerC.from('proposal_details').select('status, denial_reason').eq('id', prop2).single()
+const { data: opp2After } = await clubA.from('opportunities').select('status').eq('id', opp2.id).single()
+check('admin denies standalone partnership with reason; opportunity reopens', !denyErr && prop2After.status === 'denied' && prop2After.denial_reason && opp2After.status === 'open', denyErr?.message)
+
+// proposal in a club-started conversation → withdraw
+const { data: prop3, error: p3err } = await partnerC.rpc('submit_proposal', { p_conversation_id: convId, p_in_kind: 'Branded notebooks' })
+check('partner proposes within a club-started conversation', !p3err && !!prop3, p3err?.message)
+const { error: wErr } = await partnerC.rpc('withdraw_proposal', { p_proposal_id: prop3 })
+const { data: prop3After } = await clubA.from('proposals').select('status').eq('id', prop3).single()
+check('partner withdraws a proposal', !wErr && prop3After.status === 'withdrawn')
+const { error: declineWithdrawn } = await clubA.rpc('respond_to_proposal', { p_proposal_id: prop3, p_accept: true })
+check('withdrawn proposal cannot be accepted', !!declineWithdrawn)
+
+// club decline path
+const { data: opp3 } = await clubA.from('opportunities').insert({ club_id: clubARow.id, title: 'Snacks', support_type: 'food' }).select().single()
+const { data: prop4 } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp3.id, p_headcount: 20 })
+const { data: decl } = await clubA.rpc('respond_to_proposal', { p_proposal_id: prop4, p_accept: false })
+check('club declines a proposal', decl === 'declined')
+await clubA.from('opportunities').update({ status: 'closed' }).eq('id', opp3.id)
+const { data: pubClosed } = await anon.rpc('get_public_opportunity', { p_id: opp3.id })
+check('closed opportunity is not public', pubClosed === null)
+const { error: closedProp } = await partnerC.rpc('submit_proposal', { p_opportunity_id: opp3.id, p_headcount: 5 })
+check('cannot propose on a closed opportunity', !!closedProp)
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

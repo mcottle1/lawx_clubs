@@ -423,3 +423,7 @@ verify_jwt = true
 # Opened from an emailed link by someone without an account yet.
 [functions.accept-admin-invite]
 verify_jwt = false
+
+# Called by signed-in users right after an action; it re-checks who did what.
+[functions.notify]
+verify_jwt = true

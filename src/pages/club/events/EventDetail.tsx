@@ -4,7 +4,9 @@ import { publicUrl } from '../../../lib/files'
 import { formatEventRange, usd } from '../../../lib/format'
 import { logoUrl } from '../../../lib/storage'
 import { supabase } from '../../../lib/supabase'
-import type { ClubEvent, EventReport, Partner } from '../../../lib/types'
+import type { ClubEvent, EventReport, Opportunity, Partner, ProposalDetail } from '../../../lib/types'
+import ProposalStatusBadge from '../../../components/ProposalStatusBadge'
+import { supportLabel } from '../../../lib/constants'
 import StatusBadge from '../../../components/StatusBadge'
 import { Alert, Button, ButtonLink, Card, PageHeader, Spinner } from '../../../components/ui'
 import { useClub } from '../ClubContext'
@@ -21,8 +23,14 @@ export default function EventDetail() {
   const [event, setEvent] = useState<EventRow | null | undefined>(undefined)
   const [report, setReport] = useState<EventReport | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [opps, setOpps] = useState<Opportunity[]>([])
+  const [proposals, setProposals] = useState<ProposalDetail[]>([])
 
   useEffect(() => {
+    supabase.from('opportunities').select('*').eq('event_id', id!).order('created_at')
+      .then(({ data }) => setOpps((data as Opportunity[]) ?? []))
+    supabase.from('proposal_details').select('*').eq('event_id', id!).order('created_at', { ascending: false })
+      .then(({ data }) => setProposals((data as ProposalDetail[]) ?? []))
     supabase.from('events').select('*, partners(name, city, state, logo_path, website)').eq('id', id!).maybeSingle()
       .then(({ data }) => setEvent(data as EventRow | null))
     supabase.from('event_reports').select('*').eq('event_id', id!).maybeSingle()
@@ -107,6 +115,32 @@ export default function EventDetail() {
             )}
           </Card>
         </div>
+
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-medium">Sponsorship</h2>
+            {upcoming && <ButtonLink to={`/club/opportunities/new?event=${event.id}`} variant="secondary" className="px-3 py-1 text-sm">Post a sponsorship opportunity</ButtonLink>}
+          </div>
+          {opps.length === 0 && proposals.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">No opportunities posted or proposals received for this event yet.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-slate-100 text-sm">
+              {opps.map((o) => (
+                <li key={o.id} className="py-2">
+                  <Link to={`/club/opportunities/${o.id}/edit`} className="font-medium hover:underline">{o.title}</Link>
+                  <span className="text-xs text-slate-500"> · {supportLabel(o.support_type)} · {o.status}</span>
+                </li>
+              ))}
+              {proposals.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <span>Proposal from <strong>{p.partner_name}</strong></span>
+                  <ProposalStatusBadge status={p.status} />
+                  <Link to="/club/partnerships?tab=proposals" className="text-xs text-accent-700 hover:underline">View</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         {ended && (
           <Card>
