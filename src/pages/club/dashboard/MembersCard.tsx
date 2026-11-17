@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { countRoster } from '../../../lib/csv'
 import { formatDay, todayIso } from '../../../lib/format'
 import { MAX_UPLOAD_BYTES } from '../../../lib/constants'
@@ -39,9 +40,12 @@ export default function MembersCard({
       ) : (
         <p className="mt-1 text-sm text-slate-500">No member count yet.</p>
       )}
-      <button type="button" onClick={() => setOpen(true)} className="mt-1 text-xs text-accent-700 hover:underline">
-        Update member count
-      </button>
+      <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
+        <Link to="/club/members" className="font-medium text-accent-700 hover:underline">Manage members</Link>
+        <button type="button" onClick={() => setOpen(true)} className="text-accent-700 hover:underline">
+          Update count
+        </button>
+      </div>
       <Modal open={open} onClose={() => setOpen(false)} title="Update member count">
         <UpdateMembersForm clubId={clubId} onDone={() => { setOpen(false); onSaved() }} />
       </Modal>
@@ -98,6 +102,9 @@ function UpdateMembersForm({ clubId, onDone }: { clubId: string; onDone: () => v
           </label>
         ))}
       </fieldset>
+      <p className="text-xs text-slate-500">
+        Keeping a member list? <Link to="/club/members" className="text-accent-700 underline">Manage members</Link> instead: the count then updates itself. Saving a count here stops it from following the list.
+      </p>
       {error && <Alert>{error}</Alert>}
       {mode === 'manual' ? (
         <Field label="Number of members" required>

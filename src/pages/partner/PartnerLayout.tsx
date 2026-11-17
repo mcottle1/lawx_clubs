@@ -9,6 +9,7 @@ import { PartnerContext } from './PartnerContext'
 const tabs = [
   { to: '/partner', label: 'Dashboard', end: true },
   { to: '/partner/proposals', label: 'Proposals', end: false },
+  { to: '/partner/history', label: 'History', end: false },
   { to: '/partner/messages', label: 'Messages', end: false },
   { to: '/partner/profile', label: 'Profile', end: false },
 ]

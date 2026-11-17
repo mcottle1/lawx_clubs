@@ -313,3 +313,45 @@ Running log of judgment calls made where the spec was ambiguous.
 - **Mobile pass:** all 31 routes were checked at iPhone SE width (no sideways scrolling, no
   errors). Tab bars scroll sideways on phones with a fade at the edge as a hint. The club
   dashboard keeps the order numbers → approvals/to-dos → calendar → charts on phones.
+
+## Members and sponsorship history (added after Phase 6)
+
+- **Member list:** each member has a name, email, optional leadership role and a "joined" date
+  (the day they were added). Emails are unique per club, ignoring case. Members don't have
+  CampusBridge accounts; the list is a roster the club keeps.
+- **Who can see it:** only the club (and site admins, for support). University admins and
+  partners can't see members' names or emails. Admins still see the member *count*.
+- **Leadership roles are free text** (up to 80 characters), one per member, with common titles
+  suggested as you type. Any member with a role is listed under Leadership, sorted by role.
+- **Roster import** matches people by email: new emails are added, existing members get their
+  name (and role, if the file has a Role/Position column and the cell isn't blank) updated.
+  Removing members who aren't in the file is opt-in. Rows without a valid email or a name are
+  skipped and listed. Headers recognized: Name / Full name, First name + Last name,
+  Email / E-mail, Role / Position / Office / Title; without a header, the email column is
+  detected from the data and the first other column is the name.
+- **Member count:** the dashboard count follows the list automatically only after the club opts
+  in (importing a roster with the box ticked, or "Use this list for the dashboard count"), or
+  when the club had no count yet. This keeps an existing count (e.g. 61 entered by hand) from
+  dropping to 1 the moment someone adds their first member. Entering a count by hand on the
+  dashboard stops it following the list again. Changes update today's point on the
+  membership chart.
+- **Email to members:** sent through Resend from `EMAIL_FROM`, displayed as "*Club* via
+  CampusBridge", with Reply-To and To set to the club's email and members BCC'd in batches of 49
+  (Resend's 50-recipient limit). Plain text with a short footer. Audience is all members or
+  leadership only. The club can send a test to itself first. Limit: 5 sends per club per 24 hours
+  (`MEMBER_EMAIL_DAILY_LIMIT`). Every send is logged with subject, body, counts and attachment
+  names.
+- **Attachments:** club files are read from storage by the function (after checking they belong
+  to the club). Device files are uploaded to a private `email-attachments` bucket under the
+  user's folder, attached, then deleted. Up to 10 files, 10 MB in total. Allowed types: PDF,
+  images, Word, Excel, PowerPoint, text and CSV.
+- **No unsubscribe link:** these are messages from a club to its own members, like a club officer
+  emailing from Gmail. If clubs start emailing large lists often, add an unsubscribe flag per
+  member.
+- **Partner sponsorship history** (a new **History** tab) uses existing data, with no new tables. It
+  lists every proposal the university approved, plus approved events that name the partner as
+  sponsor without a proposal ("Listed as the event's sponsor"). Each entry shows what the
+  partner contributed and the event's attendance and offers redeemed once the club reports.
+  Totals and a CSV download follow the year filter. Spending and budgets stay hidden from
+  partners, as before.
+

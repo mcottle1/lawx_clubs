@@ -37,7 +37,7 @@ export async function sendEmail(db: SupabaseClient, input: EmailInput): Promise<
 
   if (apiKey) {
     try {
-      const res = await fetch('https://api.resend.com/emails', {
+      const res = await fetch(`${(Deno.env.get('RESEND_API_URL') || 'https://api.resend.com').replace(/\/+$/, '')}/emails`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ from, to: [input.to], subject: input.subject, text: input.text }),

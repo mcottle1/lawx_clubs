@@ -5,11 +5,13 @@ export default function Modal({
   open,
   onClose,
   title,
+  size = 'md',
   children,
 }: {
   open: boolean
   onClose: () => void
   title: string
+  size?: 'md' | 'lg'
   children: ReactNode
 }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -26,7 +28,7 @@ export default function Modal({
       onClose={onClose}
       onClick={(e) => { if (e.target === ref.current) onClose() }}
       aria-labelledby="modal-title"
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className={`m-auto ${size === 'lg' ? 'w-[min(44rem,calc(100vw-2rem))]' : 'w-[min(32rem,calc(100vw-2rem))]'} rounded-lg border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-900/40`}
     >
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
         <h2 id="modal-title" className="font-semibold">{title}</h2>

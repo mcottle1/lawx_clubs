@@ -443,5 +443,88 @@ check('partners get no amount summary', (pAmt ?? []).length === 0)
 const { data: aiRows } = await partnerC.from('ai_usage').select('id')
 check('partners cannot read AI usage', (aiRows ?? []).length === 0)
 
+// =============================================================================
+// Members, leadership roles, emailing members
+// =============================================================================
+console.log('\n--- Members ---')
+const { data: addM, error: addMErr } = await clubA.from('club_members').insert([
+  { club_id: clubARow.id, name: 'Ann Lee', email: `ann${stamp}@example.com`, role: 'President' },
+  { club_id: clubARow.id, name: 'Bo Park', email: `bo${stamp}@example.com` },
+]).select()
+check('club adds members', !addMErr && addM?.length === 2, addMErr?.message)
+const { error: dupM } = await clubA.from('club_members').insert({ club_id: clubARow.id, name: 'Dup', email: `ANN${stamp}@example.com` })
+check('duplicate member email (any case) is rejected', dupM?.code === '23505', dupM?.message)
+const { error: badEmail } = await clubA.from('club_members').insert({ club_id: clubARow.id, name: 'X', email: 'not-an-email' })
+check('invalid member email is rejected', !!badEmail)
+const { error: otherClubM } = await clubA.from('club_members').insert({ club_id: clubBRow.id, name: 'X', email: `x${stamp}@example.com` })
+check('club cannot add members to another club', !!otherClubM)
+const { data: bSeesM } = await clubB.c.from('club_members').select('id')
+check('other clubs cannot see members', (bSeesM ?? []).length === 0)
+const { data: pSeesM } = await partner.c.from('club_members').select('id')
+check('partners cannot see members', (pSeesM ?? []).length === 0)
+const { data: aSeesM } = await admin.from('club_members').select('id')
+check('university admins cannot see member emails', (aSeesM ?? []).length === 0)
+const { data: siteSeesM } = await site.from('club_members').select('id').eq('club_id', clubARow.id)
+check('site admin can read members', siteSeesM?.length === 2)
+const { data: bUpdM } = await clubB.c.from('club_members').update({ role: 'Hacker' }).eq('club_id', clubARow.id).select()
+check('other clubs cannot edit members', (bUpdM ?? []).length === 0)
+const { error: moveM } = await clubA.from('club_members').update({ club_id: clubBRow.id }).eq('id', addM[1].id)
+check('club cannot move a member to another club', !!moveM)
+const { data: roleUpd } = await clubA.from('club_members').update({ role: 'Treasurer' }).eq('id', addM[1].id).select()
+check('club sets a free-text leadership role', roleUpd?.[0]?.role === 'Treasurer')
+
+// member count follows the list once the club opts in
+await service.from('club_member_counts').delete().eq('club_id', clubARow.id)
+await service.from('club_member_counts').insert({ club_id: clubARow.id, count: 61, recorded_on: '2026-01-01', source: 'manual' })
+await clubA.from('club_members').insert({ club_id: clubARow.id, name: 'Cy Diaz', email: `cy${stamp}@example.com` })
+const latestCount = async () => (await clubA.from('club_member_counts').select('count, source').order('recorded_on', { ascending: false }).limit(1).single()).data
+check('a manual count is not overwritten by list changes', (await latestCount())?.count === 61)
+const { data: used, error: usedErr } = await clubA.rpc('use_member_list_for_count')
+check('club switches the count to follow the list', !usedErr && used === 3, usedErr?.message)
+await clubA.from('club_members').delete().eq('email', `cy${stamp}@example.com`)
+const afterDel = await latestCount()
+check('count follows the list after removing a member', afterDel?.count === 2 && afterDel?.source === 'members', JSON.stringify(afterDel))
+const { error: pUseList } = await partner.c.rpc('use_member_list_for_count')
+check('partners cannot call use_member_list_for_count', !!pUseList)
+
+// email log + attachments bucket
+const { error: logSpoof } = await clubA.from('member_emails').insert({ club_id: clubARow.id, audience: 'all', subject: 's', body: 'b', status: 'sent' })
+check('clubs cannot write the member email log', !!logSpoof)
+const attPath = `${clubARow.user_id}/email-${stamp}.pdf`
+const attUp = await clubA.storage.from('email-attachments').upload(attPath, pdfBlob)
+check('club uploads an email attachment to its own folder', !attUp.error, attUp.error?.message)
+const attOther = await clubB.c.storage.from('email-attachments').download(attPath)
+check('other clubs cannot read email attachments', !!attOther.error)
+const attSpoof = await clubB.c.storage.from('email-attachments').upload(`${clubARow.user_id}/evil.pdf`, pdfBlob)
+check('clubs cannot upload into another user\'s folder', !!attSpoof.error)
+const attPartner = await partner.c.storage.from('email-attachments').upload(`${(await partner.c.auth.getUser()).data.user.id}/p.pdf`, pdfBlob)
+check('partners cannot upload email attachments', !!attPartner.error)
+
+// email-members function: who may call it and what it accepts (works with or without RESEND_API_KEY)
+const callFn = async (c, body) => {
+  const token = (await c.auth.getSession()).data.session?.access_token
+  const res = await fetch(`${URL}/functions/v1/email-members`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return { status: res.status, body: await res.json().catch(() => ({})) }
+}
+const fnPartner = await callFn(partner.c, { audience: 'all', subject: 'Hi', body: 'Hello' })
+check('partners cannot email club members', fnPartner.status === 403, JSON.stringify(fnPartner))
+const fnNoSubject = await callFn(clubA, { audience: 'all', subject: '', body: 'Hello' })
+check('email requires a subject', fnNoSubject.status === 400)
+const fnBPath = await callFn(clubB.c, { audience: 'all', subject: 'Hi', body: 'Hello', uploads: [{ path: attPath, name: 'x.pdf' }] })
+check('a club cannot attach another club\'s upload', fnBPath.status === 403, JSON.stringify(fnBPath))
+const { data: aFile } = await clubA.from('club_files').select('id').limit(1).single()
+await clubB.c.from('club_members').insert({ club_id: clubBRow.id, name: 'Dee', email: `dee${stamp}@example.com` })
+const fnBFile = await callFn(clubB.c, { audience: 'all', subject: 'Hi', body: 'Hello', club_file_ids: [aFile.id] })
+check('a club cannot attach another club\'s files', fnBFile.status === 404, JSON.stringify(fnBFile))
+const fnSend = await callFn(clubA, { audience: 'leadership', subject: 'Officer meeting', body: 'See you Tuesday.', club_file_ids: [aFile.id], uploads: [{ path: attPath, name: 'agenda.pdf' }] })
+// Demo addresses (example.com) are never emailed, so this is logged as "skipped".
+check('club emails its leadership (demo addresses skipped)', fnSend.status === 200 && fnSend.body.recipient_count === 2 && fnSend.body.status === 'skipped', JSON.stringify(fnSend))
+const { data: logRows } = await clubA.from('member_emails').select('subject, audience, attachment_names, status')
+check('the send is in the club\'s email history', logRows?.some((r) => r.subject === 'Officer meeting' && r.attachment_names.length === 2))
+const { data: bLog } = await clubB.c.from('member_emails').select('id')
+check('other clubs cannot read the email history', (bLog ?? []).length === 0)
+const { data: leftover } = await service.storage.from('email-attachments').list(clubARow.user_id)
+check('uploaded attachments are deleted after sending', !(leftover ?? []).some((f) => attPath.endsWith(f.name)))
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

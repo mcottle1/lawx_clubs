@@ -234,6 +234,56 @@ npx supabase functions deploy
   <noreply@lawxclub.com>"`) and set up a **custom domain** (below). Redeploy functions once
   (`npx supabase functions deploy`) so emails use the new name.
 
+- **Members & sponsorship history** added one migration (the `club_members` list, the
+  `member_emails` log and a private `email-attachments` bucket) and one function,
+  `email-members`. Run `npx supabase db push` and `npx supabase functions deploy` as above. No new
+  secrets: club emails use the same `RESEND_API_KEY` and `EMAIL_FROM`. See **Emailing club
+  members** below for the Resend limits.
+
+## Emailing club members
+
+Clubs can email their member list (or just their leadership) from **Members → Email members**,
+with attachments from Club files or their device. How it's sent:
+
+- From your `EMAIL_FROM` address, shown as "*Club name* via CampusBridge". Replies go to the
+  club's own email (the one they log in with), which also receives a copy.
+- Members are **BCC'd** in batches of 49, so nobody sees anyone else's address.
+- **A verified Resend domain is required** (you already have `lawxclub.com`). Without it Resend
+  only delivers to your own address.
+- **Mind Resend's free-plan quota** (about 100 emails a day and 3,000 a month at the time of
+  writing). Plan for each recipient (To + BCC) counting toward it, so a 60-member club email may
+  use most of a day's quota. If clubs will email often, upgrade Resend (check
+  <https://resend.com/pricing>).
+- Each club can send **5 member emails per 24 hours** (test emails don't count). To change it:
+
+```bash
+npx supabase secrets set MEMBER_EMAIL_DAILY_LIMIT=10
+```
+
+- Attachments: up to 10 files and 10 MB in total. Files from the device are uploaded to a private
+  bucket only for sending and deleted right after.
+- Demo addresses (`@example.com`) are never emailed. The demo data's sent email is sample
+  history only.
+
+## How to test members and sponsorship history
+
+1. Log in as a club (demo: `demo-club-moot@example.com`) → **Members** tab. The demo club has 61
+   members, 6 of them with leadership roles.
+2. **Add member**: give them your own email address. Then **Edit** them and type a role
+   (anything, e.g. "Moot Court Coach"). They now show up under **Leadership**.
+3. **Import roster**: upload a CSV with `Name` and `Email` columns (optional `Role`). The preview
+   shows new members, changes, and skipped rows. Tick "Remove … who aren't in this file" to
+   replace the list.
+4. The dashboard's **Members** number follows the list (once you've imported a roster, or used
+   "Use this list for the dashboard count"). Adding or removing members updates it.
+5. **Email members** → choose **Leadership only**, write a subject and message, tick a club file,
+   add a file from your computer → **Send to 7 leaders**. Your own address gets the email with
+   both attachments, BCC'd. The demo addresses are skipped. The email shows under **Sent emails**.
+   (With a real club account, **Send me a test** sends a copy to the club's address first.)
+6. Log in as a partner (demo: `demo-partner-wasatch@example.com`) → **History** tab: every
+   sponsorship the university approved, with totals, results per event, a year filter and
+   **Download CSV**.
+
 ## Custom domain
 
 By default the site is at `https://mcottle1.github.io/lawx_clubs/`. To give people a cleaner link
@@ -604,6 +654,7 @@ npm run dev
 | `ANTHROPIC_API_KEY` | Supabase function secret (optional) | **Yes** | Turns on the optional AI features |
 | `ANTHROPIC_MODEL` | Supabase function secret (optional) | No | AI model, default `claude-opus-5-5` |
 | `AI_DAILY_LIMIT_SEARCH` / `AI_DAILY_LIMIT_DRAFT` | Supabase function secrets (optional) | No | Per-club AI requests per 24 h (defaults 10 / 30) |
+| `MEMBER_EMAIL_DAILY_LIMIT` | Supabase function secret (optional) | No | Member emails a club can send per 24 h (default 5) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are provided to Edge
 Functions automatically.
@@ -633,7 +684,11 @@ Functions automatically.
 - Storage: users can only write inside `<bucket>/<their user id>/`, 10 MB max per file, with
   per-bucket type limits. `logos` and `flyers` are public; `club-docs` (constitutions, other
   documents) is private and opened through 10-minute signed links. `receipts` is private too:
-  only the club and its university's admin can open a receipt.
+  only the club and its university's admin can open a receipt. `email-attachments` is private
+  and emptied after each send.
+- Member names and emails are visible only to their club (and site admins). Only a club can call
+  `email-members`, only for its own list and its own files, with a daily limit; members are
+  BCC'd so their addresses aren't shared with each other.
 
 ## Changing the colors
 

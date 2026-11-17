@@ -123,7 +123,7 @@ export interface MemberCount {
   club_id: string
   count: number
   recorded_on: string
-  source: 'manual' | 'roster'
+  source: 'manual' | 'roster' | 'members'
 }
 
 export interface BudgetSummary {
@@ -275,4 +275,33 @@ export interface PartnerEventResult {
   offers_redeemed: number | null
   notes: string | null
   submitted_at: string
+}
+
+export interface ClubMember {
+  id: string
+  club_id: string
+  name: string
+  email: string
+  email_key: string
+  /** Free-text leadership role; null = regular member. */
+  role: string | null
+  joined_on: string
+  created_at: string
+  updated_at: string
+}
+
+export type MemberEmailStatus = 'sent' | 'partial' | 'failed' | 'skipped'
+
+export interface MemberEmail {
+  id: string
+  club_id: string
+  audience: 'all' | 'leadership'
+  subject: string
+  body: string
+  recipient_count: number
+  delivered_count: number
+  attachment_names: string[]
+  status: MemberEmailStatus
+  error: string | null
+  created_at: string
 }

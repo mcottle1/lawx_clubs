@@ -234,3 +234,8 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   defined in one place. The site can run on a custom domain (e.g. a subdomain of a domain we own)
   so the shared link doesn't include the GitHub username. Affected: title, Non-functional
   requirements.
+- **2026-11-17 — Members and sponsorship history.** Clubs get a **Members** page: a roster of
+  names and emails (CSV import, add, edit, remove), free-text leadership roles, and an
+  **Email members** composer (subject, message, attachments from club files or their device) that
+  sends from the site. Partners get a **History** page listing every approved sponsorship over
+  time with contributions and results. Affected: Club flow (new Members section), Partner flow.

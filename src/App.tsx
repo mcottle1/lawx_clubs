@@ -19,6 +19,8 @@ const ClubLayout = lazy(() => import('./pages/club/ClubLayout'))
 const ClubDashboard = lazy(() => import('./pages/club/ClubDashboard'))
 const ClubFiles = lazy(() => import('./pages/club/ClubFiles'))
 const ClubSettings = lazy(() => import('./pages/club/ClubSettings'))
+const Members = lazy(() => import('./pages/club/members/Members'))
+const PartnerHistory = lazy(() => import('./pages/partner/PartnerHistory'))
 const EventDetail = lazy(() => import('./pages/club/events/EventDetail'))
 const EventForm = lazy(() => import('./pages/club/events/EventForm'))
 const EventReport = lazy(() => import('./pages/club/events/EventReport'))
@@ -65,6 +67,7 @@ export default function App() {
             <Route path="opportunities/:id/edit" element={<OpportunityForm />} />
             <Route path="messages" element={<Inbox side="club" />} />
             <Route path="messages/:id" element={<Thread side="club" />} />
+            <Route path="members" element={<Members />} />
             <Route path="files" element={<ClubFiles />} />
             <Route path="settings" element={<ClubSettings />} />
           </Route>
@@ -72,6 +75,7 @@ export default function App() {
             <Route index element={<PartnerDashboard />} />
             <Route path="opportunities/:id" element={<PartnerOpportunity />} />
             <Route path="proposals" element={<PartnerProposals />} />
+            <Route path="history" element={<PartnerHistory />} />
             <Route path="messages" element={<Inbox side="partner" />} />
             <Route path="messages/:id" element={<PartnerThread />} />
             <Route path="profile" element={<PartnerProfile />} />

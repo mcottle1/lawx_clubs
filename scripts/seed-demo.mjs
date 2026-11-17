@@ -2,7 +2,8 @@
 // Demo data so every dashboard and chart has something to show:
 // 2 universities (BYU, University of Utah) with an admin each, 3 clubs, 4 partners,
 // past events with reports + receipts, upcoming events, opportunities, proposals
-// in every state, conversations, member-count history and to-dos.
+// in every state, conversations, member-count history, a member list with
+// leadership roles (Moot Court Society) and to-dos.
 //
 // Local (after `npx supabase start` / `db reset`):   npm run seed:demo
 // Hosted:  SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=... node scripts/seed-demo.mjs --yes
@@ -167,6 +168,28 @@ for (const c of CLUBS) {
   })
   must(await db.from('club_member_counts').insert(counts), 'member counts')
   clubs[c.key] = row
+}
+
+// ---- Moot Court Society member list (61 members, 6 in leadership) -------------------
+{
+  const FIRST = ['Ava', 'Ben', 'Chloe', 'Daniel', 'Emma', 'Felipe', 'Grace', 'Hiro', 'Isla', 'Jacob', 'Kaia', 'Liam', 'Maya', 'Noah', 'Olivia', 'Parker', 'Quinn', 'Rosa', 'Sam', 'Tessa', 'Uma', 'Victor', 'Willa', 'Xavier', 'Yara', 'Zane']
+  const LAST = ['Anderson', 'Baker', 'Chen', 'Dalton', 'Evans', 'Fonoti', 'Garcia', 'Hansen', 'Iverson', 'Jensen', 'Kim', 'Larsen', 'Moreno', 'Nguyen', 'Olsen', 'Peterson', 'Ruiz', 'Smith', 'Taylor', 'Young']
+  const ROLES = ['President', 'Vice President', 'Treasurer', 'Secretary', 'Competitions Director', '1L Representative']
+  const members = Array.from({ length: 61 }, (_, i) => {
+    const first = FIRST[i % FIRST.length]
+    const last = LAST[(i * 7) % LAST.length]
+    const joined = new Date(now); joined.setMonth(joined.getMonth() - (i < 38 ? 6 : Math.ceil((61 - i) / 4))); joined.setDate(1 + (i % 27))
+    return { club_id: clubs.moot.id, name: `${first} ${last}`, email: `${first}.${last}${i}@example.com`.toLowerCase(), role: ROLES[i] ?? null, joined_on: ymd(joined.toISOString()) }
+  })
+  must(await db.from('club_members').insert(members), 'members')
+  // The dashboard count (61) now follows the list.
+  const { data: latest } = await db.from('club_member_counts').select('id').eq('club_id', clubs.moot.id).order('recorded_on', { ascending: false }).limit(1).single()
+  must(await db.from('club_member_counts').update({ source: 'members' }).eq('id', latest.id), 'member count source')
+  must(await db.from('member_emails').insert({
+    club_id: clubs.moot.id, sent_by: clubs.moot.user_id, audience: 'all', subject: 'Tryouts for the spring moot court team',
+    body: 'Hi everyone,\n\nTryouts for the spring competition team are in two weeks. The problem packet is attached. Sign up for a time slot by Friday.\n\nSee you there!\nAva',
+    recipient_count: 61, delivered_count: 61, attachment_names: ['Tryout problem packet.pdf'], status: 'sent', created_at: new Date(now.getTime() - 12 * 86400000).toISOString(),
+  }), 'member email')
 }
 
 // ---- events -----------------------------------------------------------------------

@@ -435,3 +435,7 @@ verify_jwt = false
 # Optional AI features (only active when ANTHROPIC_API_KEY is set).
 [functions.ai]
 verify_jwt = true
+
+# Club → members email (Members page).
+[functions.email-members]
+verify_jwt = true
