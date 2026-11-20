@@ -252,3 +252,10 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   highlight, second accent) that the site uses for that university's clubs and its admin only.
   Text stays readable whatever is picked. Affected: University admin flow (settings),
   Non-functional requirements (branding).
+- **2026-11-22 — Colleges and organization admins.** Universities now have colleges (or schools,
+  or departments), each with its own admins who handle its clubs as university admins did. A new
+  organization admin per university creates the colleges, invites their admins, sees everything
+  read-only and approves for any college without an admin. Clubs pick a university and then a
+  college at sign-up; partners see "Club · College · University". Colors are set per university
+  with an optional per-college override; approval settings, room booking and receipts are per
+  college. Affected: Accounts and roles, Club sign-up, University admin flow, Partner flow.

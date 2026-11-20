@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { clubWhere } from '../../lib/constants'
 import { Link } from 'react-router-dom'
 import StatTile from '../../components/charts/StatTile'
 import { Button, Card, inputClass, PageHeader, Spinner } from '../../components/ui'
@@ -14,6 +15,7 @@ interface HistoryRow {
   upcoming: boolean
   club: string
   university: string
+  college: string
   title: string
   amount: number
   headcount: number
@@ -46,7 +48,7 @@ export default function PartnerHistory() {
         const date = x.event_starts_at ?? x.updated_at
         out.push({
           key: x.id, date, upcoming: new Date(date).getTime() > now,
-          club: x.club_name, university: x.university_name,
+          club: x.club_name, university: x.university_name, college: x.department_name,
           title: x.event_name ?? x.opportunity_title ?? 'General sponsorship',
           amount: Number(x.amount ?? 0), headcount: x.headcount ?? 0, inKind: x.in_kind, studentOffer: x.student_offer,
           attendees: res?.attendees ?? null, redeemed: res?.offers_redeemed ?? null,
@@ -58,7 +60,7 @@ export default function PartnerHistory() {
         const res = results.get(ev.id)
         out.push({
           key: ev.id, date: ev.starts_at, upcoming: new Date(ev.starts_at).getTime() > now,
-          club: ev.club_name, university: ev.university_name, title: ev.name,
+          club: ev.club_name, university: ev.university_name, college: ev.department_name, title: ev.name,
           amount: 0, headcount: 0, inKind: null, studentOffer: null,
           attendees: res?.attendees ?? null, redeemed: res?.offers_redeemed ?? null,
         })
@@ -83,9 +85,9 @@ export default function PartnerHistory() {
   }
 
   function download() {
-    const header = ['Date', 'Club', 'University', 'Event or opportunity', 'Funding (USD)', 'Lunches / people covered', 'In-kind', 'Student offer', 'Attendees', 'Offers extended']
+    const header = ['Date', 'Club', 'College', 'University', 'Event or opportunity', 'Funding (USD)', 'Lunches / people covered', 'In-kind', 'Student offer', 'Attendees', 'Offers extended']
     const lines = shown.map((x) => [
-      x.date.slice(0, 10), x.club, x.university, x.title, x.amount || null, x.headcount || null, x.inKind, x.studentOffer, x.attendees, x.redeemed,
+      x.date.slice(0, 10), x.club, x.college, x.university, x.title, x.amount || null, x.headcount || null, x.inKind, x.studentOffer, x.attendees, x.redeemed,
     ])
     downloadCsv(`campusbridge-sponsorships${year === 'all' ? '' : `-${year}`}.csv`, [header, ...lines])
   }
@@ -143,7 +145,7 @@ export default function PartnerHistory() {
                       <div className="min-w-0">
                         <p className="font-medium">{x.title}</p>
                         <p className="text-xs text-slate-500">
-                          {x.club} · {x.university} · {new Date(x.date).toLocaleDateString([], { dateStyle: 'medium' })}
+                          {x.club} · {clubWhere(x.college, x.university)} · {new Date(x.date).toLocaleDateString([], { dateStyle: 'medium' })}
                         </p>
                         <p className="mt-1 text-sm text-slate-700">{terms.length ? terms.join(' · ') : 'Listed as the event’s sponsor'}</p>
                       </div>

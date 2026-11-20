@@ -422,7 +422,38 @@ Running log of judgment calls made where the spec was ambiguous.
   and unaffected.
 - **When it applies:** the colors are cached per user, so pages open in the right colors; a club
   sees a change the next time it opens the site.
-- **With the planned department admins (two-level administration),** this setting would belong to
-  the top-level (university/district) administrator, possibly with per-department colors. Not
-  built yet.
+- **With colleges (2026-11-22):** the organization admin sets the university's colors; each
+  college admin can override them for that college's clubs.
+
+## Colleges and organization admins (2026-11-22)
+
+- **Names in the code:** the "university admin" role (`university_admin`, `/university-admin`)
+  is now the **college admin**; the value kept its name so existing logins and emailed links keep
+  working. The new top level is `org_admin` (`/org-admin`). Colleges are the `departments` table.
+- **One role and one place per login.** A college admin belongs to one college and an organization
+  admin to one university. Someone who needs both uses two email addresses. Inviting an email that
+  already has an account is refused with that explanation.
+- **Organization admins:** invited by the site admin (several per university allowed). They add,
+  rename and remove (only empty) colleges, invite and remove college admins (removing deactivates
+  the account), move clubs between colleges of the same university, choose the word for units
+  (College, School or Department), and set the university's colors. They see all of the
+  university's clubs, events, reports, member counts, posts, proposals, receipts and first
+  messages read-only. They can approve, send back or deny, and review receipts, **only** for
+  colleges with no active admin. They don't see club budgets beyond what college admins already
+  see (the clubs overview), and they don't read club–partner conversations.
+- **College admins:** everything university admins had, scoped to their college: approvals,
+  receipts, clubs overview, room-booking info and approval settings (now per college), plus an
+  optional color override. They can see their co-admins but not invite or remove them.
+- **"Participating":** a college is participating once it has an admin; only participating
+  colleges are offered at sign-up, and a university is listed if it has at least one. Removing a
+  college's last admin takes it off the sign-up list; its existing clubs stay, and the
+  organization admin approves for them.
+- **Emails** that used to go to the university admin now go to every active admin of the club's
+  college, or to the organization admins if the college has none.
+- **Existing data** (migration): see README → Colleges and organization admins. The default college
+  is named after its university because we can't know the real college name; partners don't see a
+  repeated name ("Club · BYU · BYU" shows as "Club · BYU").
+- **Not included yet:** high schools and districts, organization-level reports across colleges,
+  and organization admins editing a college's settings from their own pages (the database allows
+  it, but there's no screen for it).
 

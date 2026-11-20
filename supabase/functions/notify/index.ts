@@ -18,7 +18,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { adminClient, userClient } from '../_shared/clients.ts'
 import { corsHeaders, errorResponse, json } from '../_shared/cors.ts'
 import { sendEmail } from '../_shared/email.ts'
-import { adminEmailFor, link, notifyAdminOfEvent } from '../_shared/notifications.ts'
+import { emailAdmins, link, notifyAdminOfEvent } from '../_shared/notifications.ts'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -26,7 +26,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405)
 
-  const { data: auth } = await userClient(req).auth.getUser()
+  const callerDb = userClient(req)
+  const { data: auth } = await callerDb.auth.getUser()
   const user = auth?.user
   if (!user) return errorResponse('Not signed in', 401)
 
@@ -56,10 +57,8 @@ Deno.serve(async (req) => {
       // A first message waiting for approval goes to the university admin, not the partner.
       if (c.approval_status !== 'approved') {
         if (side !== 'club' || c.approval_status !== 'pending') return json({ status: 'skipped' })
-        const to = await adminEmailFor(db, c.club_id)
-        if (!to) return json({ status: 'no_admin' })
-        const status = await sendEmail(db, {
-          to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_message:${id}:${c.submitted_at}`,
+        const status = await emailAdmins(db, c.club_id, {
+          template: 'pending_approval', relatedId: id, dedupeKey: `pending_message:${id}:${c.submitted_at}`,
           subject: `Approval needed: ${c.clubs.name}'s message to ${c.partners.name}`,
           text: `${c.clubs.name} wants to message ${c.partners.name} ("${c.subject}"). It needs your approval before it's sent.\n\nReview it here:\n${link('/university-admin')}\n`,
         })
@@ -75,10 +74,8 @@ Deno.serve(async (req) => {
       const op = o as any
       if (!op || op.clubs?.user_id !== user.id) return errorResponse('Not allowed', 403)
       if (op.approval_status !== 'pending') return json({ status: 'skipped' })
-      const to = await adminEmailFor(db, op.club_id)
-      if (!to) return json({ status: 'no_admin' })
-      const status = await sendEmail(db, {
-        to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_opportunity:${id}:${op.submitted_at}`,
+      const status = await emailAdmins(db, op.club_id, {
+        template: 'pending_approval', relatedId: id, dedupeKey: `pending_opportunity:${id}:${op.submitted_at}`,
         subject: `Approval needed: ${op.clubs.name}'s opportunity "${op.title}"`,
         text: `${op.clubs.name} posted a sponsorship opportunity, "${op.title}". Partners see it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
       })
@@ -93,10 +90,8 @@ Deno.serve(async (req) => {
       if (!pr || pr.partners?.user_id !== user.id) return errorResponse('Not allowed', 403)
       const about = pr.opportunities?.title ?? pr.events?.name ?? 'your club'
       if (pr.status === 'pending_review') {
-        const to = await adminEmailFor(db, pr.club_id)
-        if (!to) return json({ status: 'no_admin' })
-        const status = await sendEmail(db, {
-          to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal_review:${id}:${pr.submitted_at}`,
+        const status = await emailAdmins(db, pr.club_id, {
+          template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal_review:${id}:${pr.submitted_at}`,
           subject: `Approval needed: proposal from ${pr.partners.name} to ${pr.clubs.name}`,
           text: `${pr.partners.name} sent ${pr.clubs.name} a sponsorship proposal for "${about}". The club sees it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
         })
@@ -126,9 +121,8 @@ Deno.serve(async (req) => {
         if (pr.event_id && pr.events?.approval_status === 'pending') {
           await notifyAdminOfEvent(db, pr.event_id)
         } else {
-          const to = await adminEmailFor(db, pr.club_id)
-          if (to) await sendEmail(db, {
-            to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal:${id}:${pr.club_responded_at}`,
+          await emailAdmins(db, pr.club_id, {
+            template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal:${id}:${pr.club_responded_at}`,
             subject: `Approval needed: partnership for ${pr.clubs.name}`,
             text: `${pr.clubs.name} accepted a sponsorship for "${about}". It needs your approval.\n\nReview it here:\n${link('/university-admin')}\n`,
           })
@@ -139,16 +133,17 @@ Deno.serve(async (req) => {
 
     case 'reviewed': {
       const kind = ['event', 'proposal', 'opportunity', 'message'].includes(body?.kind) ? body.kind as string : 'event'
-      const { data: adminRow } = await db.from('university_admins').select('university_id').eq('user_id', user.id).maybeSingle()
-      if (!adminRow) return errorResponse('Not allowed', 403)
-      const mine = (club: { university_id?: string } | null | undefined) => club?.university_id === adminRow.university_id
+      // Only someone acting as the club's admin (its college admin, or the
+      // organization admin for a college without one) can trigger these.
+      const mine = async (clubId: string | undefined) =>
+        !!clubId && (await callerDb.rpc('is_admin_of_club', { p_club_id: clubId })).data === true
       const noteLine = (label: string, note: string | null) => (note ? `${label}: ${note}\n` : '')
 
       if (kind === 'opportunity') {
-        const { data } = await db.from('opportunities').select('id, title, approval_status, review_note, reviewed_at, clubs(email, university_id)').eq('id', id).maybeSingle()
+        const { data } = await db.from('opportunities').select('id, title, approval_status, review_note, reviewed_at, club_id, clubs(email, university_id)').eq('id', id).maybeSingle()
         // deno-lint-ignore no-explicit-any
         const o = data as any
-        if (!o || !mine(o.clubs) || o.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        if (!o || !(await mine(o.club_id)) || o.approval_status === 'pending') return errorResponse('Not allowed', 403)
         const s = o.approval_status as string
         await sendEmail(db, {
           to: o.clubs.email, template: `opportunity_${s}`, relatedId: id, dedupeKey: `reviewed:opportunity:${id}:${o.reviewed_at}`,
@@ -168,7 +163,7 @@ Deno.serve(async (req) => {
           .eq('id', id).maybeSingle()
         // deno-lint-ignore no-explicit-any
         const c = data as any
-        if (!c || !mine(c.clubs) || c.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        if (!c || !(await mine(c.club_id)) || c.approval_status === 'pending') return errorResponse('Not allowed', 403)
         const s = c.approval_status as string
         await sendEmail(db, {
           to: c.clubs.email, template: `message_${s}`, relatedId: id, dedupeKey: `reviewed:message:${id}:${c.reviewed_at}`,
@@ -188,7 +183,7 @@ Deno.serve(async (req) => {
         const { data: ev } = await db.from('events').select('id, name, approval_status, denial_reason, reviewed_at, club_id, clubs(name, email, university_id)').eq('id', id).maybeSingle()
         // deno-lint-ignore no-explicit-any
         const e = ev as any
-        if (!e || !mine(e.clubs) || e.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        if (!e || !(await mine(e.club_id)) || e.approval_status === 'pending') return errorResponse('Not allowed', 403)
         const s = e.approval_status as string
         await sendEmail(db, {
           to: e.clubs.email, template: `event_${s}`, relatedId: id,
@@ -206,8 +201,8 @@ Deno.serve(async (req) => {
         proposals = data ?? []
       } else {
         // deno-lint-ignore no-explicit-any
-        const { data } = await db.from('proposals').select('id, status, denial_reason, reviewed_at, club_visible, submitted_at, partners(email, name), clubs(name, email, university_id), opportunities(title), events(name)').eq('id', id).maybeSingle() as any
-        if (!data || !mine(data.clubs) || !data.reviewed_at) return errorResponse('Not allowed', 403)
+        const { data } = await db.from('proposals').select('id, club_id, status, denial_reason, reviewed_at, club_visible, submitted_at, partners(email, name), clubs(name, email, university_id), opportunities(title), events(name)').eq('id', id).maybeSingle() as any
+        if (!data || !(await mine(data.club_id)) || !data.reviewed_at) return errorResponse('Not allowed', 403)
         const about = data.opportunities?.title ?? data.events?.name ?? 'your club'
         const key = `reviewed:proposal:${id}:${data.reviewed_at}`
         if (data.status === 'pending_club') {
@@ -287,10 +282,9 @@ Deno.serve(async (req) => {
       }
       const { count } = await db.from('receipts').select('id', { count: 'exact', head: true }).eq('event_id', id).eq('status', 'pending')
       if (count) {
-        const to = await adminEmailFor(db, e.club_id)
-        if (to) {
-          out.admin = await sendEmail(db, {
-            to, template: 'receipts_submitted', relatedId: id, dedupeKey: `receipts_submitted:${id}:${count}`,
+        {
+          out.admin = await emailAdmins(db, e.club_id, {
+            template: 'receipts_submitted', relatedId: id, dedupeKey: `receipts_submitted:${id}:${count}`,
             subject: `Receipts to review: ${e.clubs.name}`,
             text: `${e.clubs.name} submitted ${count} receipt(s) for "${e.name}".\n\nReview them here:\n${link('/university-admin/receipts')}\n`,
           })
@@ -305,8 +299,8 @@ Deno.serve(async (req) => {
         .eq('id', id).maybeSingle()
       // deno-lint-ignore no-explicit-any
       const rc = r as any
-      const { data: adminRow } = await db.from('university_admins').select('university_id').eq('user_id', user.id).maybeSingle()
-      if (!rc || !adminRow || rc.clubs?.university_id !== adminRow.university_id || rc.status === 'pending') {
+      const { data: actsForClub } = rc ? await callerDb.rpc('is_admin_of_club', { p_club_id: rc.club_id }) : { data: false }
+      if (!rc || actsForClub !== true || rc.status === 'pending') {
         return errorResponse('Not allowed', 403)
       }
       const amount = Number(rc.amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' })

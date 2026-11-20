@@ -27,7 +27,8 @@ export const INSTITUTION_TYPE_LABELS: Record<InstitutionType, string> = {
 export const ROLE_LABELS: Record<Role, string> = {
   club: 'Club',
   partner: 'Partner',
-  university_admin: 'University admin',
+  university_admin: 'College admin',
+  org_admin: 'Organization admin',
   site_admin: 'Site admin',
 }
 
@@ -36,6 +37,7 @@ export const ROLE_HOME: Record<Role, string> = {
   club: '/club',
   partner: '/partner',
   university_admin: '/university-admin',
+  org_admin: '/org-admin',
   site_admin: '/site-admin',
 }
 
@@ -63,3 +65,12 @@ export const SUPPORT_TYPES: { value: import('./types').SupportType; label: strin
 
 export const supportLabel = (v: string) => SUPPORT_TYPES.find((s) => s.value === v)?.label ?? v
 export const categoryLabel = (v: string) => PARTNER_CATEGORIES.find((c) => c.value === v)?.label ?? v
+
+/** "Moot Court Society · J. Reuben Clark Law School · Brigham Young University" (the college is
+ *  left out when it has the same name as the university). */
+export function clubWhere(departmentName: string | null | undefined, universityName: string): string {
+  return departmentName && departmentName.trim().toLowerCase() !== universityName.trim().toLowerCase()
+    ? `${departmentName} · ${universityName}`
+    : universityName
+}
+

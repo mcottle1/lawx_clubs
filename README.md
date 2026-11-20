@@ -31,9 +31,10 @@ scripts/                       Demo data, IPEDS importer, local bootstrap, test 
 
 | Role | How the account is created | Lands on |
 | --- | --- | --- |
-| Club | Public sign-up (`/#/signup/club`); only universities that have an active admin are listed | `/#/club` |
+| Club | Public sign-up (`/#/signup/club`): choose a university, then one of its colleges. Only colleges with an active admin are listed | `/#/club` |
 | Partner | Public sign-up (`/#/signup/partner`) | `/#/partner` |
-| University admin | Site admin sends an invite → admin opens the emailed link, sets a password and scheduling info. This marks the university "participating" | `/#/university-admin` |
+| Organization admin | Runs a whole university. Site admin sends an invite → they set a password. They add the university's colleges and invite each college's admins | `/#/org-admin` |
+| College admin | Approves one college's clubs (events, partnerships, posts, messages, receipts). Invited by the organization admin (or site admin); the first admin of a college also enters its room-booking info. Several per college | `/#/university-admin` |
 | Site admin | Granted by hand in SQL (step 7 below) | `/#/site-admin` |
 
 ---
@@ -248,6 +249,13 @@ npx supabase functions deploy
   university admin until the admin turns them off (**Settings → What needs your approval**).
   Messages and posts that already exist stay live.
 
+- **Colleges and organization admins** added two migrations and changed the `invite-university-admin`,
+  `accept-admin-invite`, `notify` and `run-daily-jobs` functions. Run `npx supabase db push` and
+  `npx supabase functions deploy`. The migration moves your existing data automatically (see
+  **Colleges and organization admins** below), so **back up first**: Supabase → Database →
+  Backups, or `npx supabase db dump --data-only > backup.sql`. Then, as site admin, **invite an
+  organization admin** for each university that's using the site.
+
 - **University colors** added one migration (three color columns on `universities` and two small
   functions). Run `npx supabase db push`; no functions or secrets changed. Test it: log in as a
   university admin → **Settings → Colors for your university**, type or pick three colors (the
@@ -342,6 +350,56 @@ Everyone involved gets an email at each step. Receipts keep their own approve/de
 6. **Send back** a pending event, then as that club open the event: **Resubmit without changes**
    or **Edit and resubmit**.
 
+## Colleges and organization admins
+
+Universities are now run at two levels:
+
+- An **organization admin** (one or more per university) adds the university's **colleges**
+  (or schools, or departments: they choose the word), invites each college's admins, renames
+  colleges and moves clubs between them. They can **see** every club and request at the
+  university, but they only **decide** for a college that has no admin of its own. They also pick
+  the university's colors.
+- **College admins** (one or more per college) do what university admins did before: approve
+  their clubs' events, partnerships, posts and first messages; review receipts; set their
+  college's room-booking info and approval settings; and optionally give their clubs their own
+  colors. Approval emails go to all of a college's admins, or to the organization admins if the
+  college has none.
+- **Clubs** choose a university and then a college when they sign up. A college appears there once
+  it has an admin.
+- **Partners** see where a club is: "Moot Court Society · J. Reuben Clark Law School · Brigham
+  Young University".
+
+**What the migration does to existing data.** Every university that already had an admin, clubs
+or a pending invite gets one college **named after the university**; its admin becomes that
+college's admin (same login), and its clubs, settings and pending invite move in. The organization
+admin can rename it (e.g. to "J. Reuben Clark Law School"). The hand-added "BYU J. Reuben Clark
+Law School" and "University of Utah S.J. Quinney College of Law" entries, if anyone used them,
+become colleges of BYU and Utah. Nobody is an organization admin yet: invite one per university
+from the site admin page. Until then, a college without an admin has nobody to approve its
+clubs' requests.
+
+**One role per login.** A person who is both an organization admin and a college admin needs two
+email addresses (e.g. a personal and a shared office address).
+
+## How to test colleges
+
+1. As site admin → **Invite an administrator** → **Organization admin**, pick BYU, use an email
+   you can read → open the link and set a password. You land on **Colleges**.
+2. **Add a college** (e.g. "J. Reuben Clark Law School"), then **Invite admin** for it → open that
+   link in a private window and set a password plus room-booking info → you land on that
+   college's page.
+3. Log out → **Sign up as a Club** → choose BYU → the **College** list shows your college (a
+   college without an admin doesn't appear).
+4. As the organization admin: **Approvals** shows every college's requests, with buttons only for
+   colleges without an admin. **Clubs** lets you move a club to another college. **Settings** has
+   the name for units and the university's colors.
+5. As the college admin → **Settings**: co-admins, room booking, approval settings, and
+   "Colors for your clubs" (overrides the university's colors for this college only).
+
+Demo data has all of this ready: `demo-org-byu@example.com` (organization admin) and
+`demo-admin-byu@example.com` (J. Reuben Clark Law School admin); BYU's "Marriott School of
+Business" has no admin yet.
+
 ## Custom domain
 
 By default the site is at `https://mcottle1.github.io/lawx_clubs/`. To give people a cleaner link
@@ -380,8 +438,9 @@ npx supabase secrets set SITE_URL=https://app.lawxclub.com/
 ## Demo data
 
 `scripts/seed-demo.mjs` fills the site with realistic data so every dashboard and chart has
-something to show: **Brigham Young University** and **University of Utah** (each with an
-administrator), **3 clubs**, **4 partners**, past events with reports and receipts, upcoming
+something to show: **Brigham Young University** and **University of Utah**, each with an
+organization admin and a law school college with its own admin (BYU also has an empty business
+school with no admin), **3 clubs**, **4 partners**, past events with reports and receipts, upcoming
 events, opportunities, proposals in every state, conversations, member history and to-dos.
 
 **Locally** (after `npx supabase start`): `npm run seed:demo`
@@ -401,15 +460,17 @@ SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/seed-demo.mjs --ye
 ```
 
 Re-running needs `--reset`, which deletes the demo accounts (and everything they own) and creates
-them again. If a university already has a real administrator, the script keeps it and doesn't
-create a demo admin there.
+them again. Real administrators and colleges are left alone; the demo colleges (found or created
+by name) are reset to the default settings.
 
 **Demo logins** — password for all: `campusbridge-demo`
 
 | Who | Email | Good for trying |
 | --- | --- | --- |
-| BYU administrator | `demo-admin-byu@example.com` | Approvals (an event + partnership), receipts queue, clubs overview |
-| University of Utah administrator | `demo-admin-utah@example.com` | A receipt waiting for review |
+| BYU organization admin | `demo-org-byu@example.com` | Colleges, inviting a college admin, read-only approvals, moving clubs, colors |
+| BYU Law college admin | `demo-admin-byu@example.com` | Approvals (an event + partnership, a first message, a post), receipts queue, clubs overview |
+| Utah organization admin | `demo-org-utah@example.com` | A university with one college |
+| Utah Law college admin | `demo-admin-utah@example.com` | A receipt waiting for review |
 | Moot Court Society (BYU) | `demo-club-moot@example.com` | Full dashboard and charts, a proposal to accept, unread message |
 | Women in Law (BYU) | `demo-club-wil@example.com` | A report that's due, a partnership waiting on the university |
 | Public Interest Law Society (Utah) | `demo-club-pils@example.com` | A smaller club at another university |
@@ -635,11 +696,12 @@ University-admin approval of events comes in Phase 3, and reminder emails in Pha
 
 ## How to test Phase 1 on the live site
 
-1. Log in as your site admin → **Invite a university administrator** → pick a university,
-   enter an email you can read → **Send invite**. Copy the link shown.
-2. In a private window, open the link → set a password and a scheduling link/instructions →
-   you land on the university-admin page.
-3. Log out → **Sign up as a Club** → that university now appears in the list.
+1. Log in as your site admin → **Invite an administrator** (organization admin for a university,
+   then as that admin add a college and invite its admin; see **How to test colleges**). Copy
+   the link shown.
+2. In a private window, open the link → set a password (and, for a college's first admin, a
+   scheduling link/instructions).
+3. Log out → **Sign up as a Club** → that university and college now appear in the lists.
 4. **Sign up as a Partner** with a logo → the partner page shows it.
 5. **Forgot password** → the reset link opens "Choose a new password" (see step 7 for which
    addresses can receive it).
@@ -726,7 +788,8 @@ Functions automatically.
   invite token (only its SHA-256 hash is stored). `site_admin` is granted by hand.
 - Nobody can change their own role; users can only update specific columns of their own row
   (e.g. a club can't move itself to another university).
-- Clubs see only their club; university admins see only their university's clubs; partners
+- Clubs see only their club; college admins see only their college's clubs; organization admins
+  see (read-only) their whole university and act only for colleges without an admin; partners
   can't see club budgets. Deactivated accounts lose access to everything.
 - Clubs can't approve their own events, can't create or edit past events, and editing an
   approved event's details sends it back to pending (enforced by a database trigger).
@@ -756,9 +819,10 @@ color for buttons, links and active states), `--color-pop-*` (coral, bright high
 so changing them there updates the whole site. If you change them, keep text readable (dark text
 on the coral buttons, white text on indigo).
 
-**Per-university colors.** A university administrator can pick their own three colors in
-**Settings → Colors for your university**. They replace these defaults only for that university's
-clubs and its administrator; partners, other universities and logged-out visitors keep the
+**Per-university colors.** A university's organization admin can pick three colors in
+**Settings → Colors for your university**, and each college admin can override them for their own
+clubs (**Settings → Colors for your clubs**). They replace these defaults only for that
+university's clubs and admins; partners, other universities and logged-out visitors keep the
 CampusBridge colors. The site builds the full set of shades from the three picks
 (`src/lib/universityTheme.ts`) and nudges any shade that would make text hard to read, so even a
 very light pick stays readable. A club sees new colors the next time it opens the site.

@@ -13,14 +13,20 @@ const tabs = [
 
 export default function AdminLayout() {
   const { session } = useAuth()
-  const [uni, setUni] = useState<string>('')
+  const [where, setWhere] = useState<{ college: string; university: string; unit: string } | null>(null)
   useEffect(() => {
-    supabase.from('university_admins').select('universities(name)').eq('user_id', session!.user.id).maybeSingle()
-      .then(({ data }) => setUni((data as { universities: { name: string } | null } | null)?.universities?.name ?? ''))
+    supabase.from('department_admins').select('departments(name, universities(name, unit_label))').eq('user_id', session!.user.id).maybeSingle()
+      .then(({ data }) => {
+        const d = (data as { departments: { name: string; universities: { name: string; unit_label: string } | null } | null } | null)?.departments
+        if (d) setWhere({ college: d.name, university: d.universities?.name ?? '', unit: d.universities?.unit_label ?? 'College' })
+      })
   }, [session])
   return (
     <>
-      <PageHeader title={uni || 'Your university'} subtitle="University club administrator" />
+      <PageHeader
+        title={where?.college ?? 'Your college'}
+        subtitle={where ? `${where.college !== where.university ? `${where.university} · ` : ''}${where.unit} club administrator` : 'Club administrator'}
+      />
       <nav aria-label="Administrator" className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200 text-sm max-sm:pr-8 max-sm:[mask-image:linear-gradient(to_right,black_80%,transparent)]">
         {tabs.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}

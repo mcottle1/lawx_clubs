@@ -8,7 +8,10 @@ import { receiptUrl } from '../../lib/receipts'
 import { supabase } from '../../lib/supabase'
 import type { Receipt, ReceiptStatus } from '../../lib/types'
 
-type Row = Receipt & { clubs: { name: string } | null; events: { name: string; starts_at: string } | null }
+type Row = Receipt & {
+  clubs: { name: string; department_id: string; departments: { name: string } | null } | null
+  events: { name: string; starts_at: string } | null
+}
 
 const FILTERS: { key: string; label: string; statuses: ReceiptStatus[] }[] = [
   { key: 'todo', label: 'To do', statuses: ['pending', 'approved'] },
@@ -16,8 +19,12 @@ const FILTERS: { key: string; label: string; statuses: ReceiptStatus[] }[] = [
   { key: 'denied', label: 'Denied', statuses: ['denied'] },
 ]
 
-/** /university-admin/receipts — pending → approved → reimbursed, or denied with a note. */
-export default function ReceiptsQueue() {
+/**
+ * Receipts: pending → approved → reimbursed, or denied with a note. With
+ * `oversight` (organization admin) every college's receipts are listed, with
+ * buttons only for colleges that have no admin of their own.
+ */
+export default function ReceiptsQueue({ oversight }: { oversight?: { actsFor: Set<string> } }) {
   const [filter, setFilter] = useState('todo')
   const [rows, setRows] = useState<Row[] | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
@@ -27,7 +34,7 @@ export default function ReceiptsQueue() {
 
   const load = useCallback(async () => {
     const statuses = FILTERS.find((f) => f.key === filter)!.statuses
-    const { data } = await supabase.from('receipts').select('*, clubs(name), events(name, starts_at)')
+    const { data } = await supabase.from('receipts').select('*, clubs(name, department_id, departments(name)), events(name, starts_at)')
       .in('status', statuses).order('created_at')
     const list = (data as Row[]) ?? []
     setRows(list)
@@ -83,18 +90,20 @@ export default function ReceiptsQueue() {
                       <span className="text-lg font-semibold">{usd.format(Number(r.amount))}</span>
                       <ReceiptStatusBadge status={r.status} />
                     </div>
-                    <p className="font-medium">{r.clubs?.name}</p>
+                    <p className="font-medium">{r.clubs?.name}{oversight && r.clubs?.departments && <span className="font-normal text-slate-500"> · {r.clubs.departments.name}</span>}</p>
                     <p className="text-slate-600">{r.events?.name}{r.events && ` · ${new Date(r.events.starts_at).toLocaleDateString()}`}</p>
                     {r.description && <p className="text-slate-600">For: {r.description}</p>}
                     <p className="text-xs text-slate-500">{r.file_name} · submitted {new Date(r.created_at).toLocaleDateString()}</p>
                     {r.admin_note && <p className="mt-1 text-xs text-slate-600">Note: {r.admin_note}</p>}
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    {oversight && !oversight.actsFor.has(r.clubs?.department_id ?? '') ? (
+                      <p className="mt-3 text-xs text-slate-500">Handled by {r.clubs?.departments?.name ?? 'the college'}’s admins</p>
+                    ) : <div className="mt-3 flex flex-wrap gap-2">
                       {r.status === 'pending' && <Button disabled={busy === r.id} onClick={() => void move(r, 'approved')}>Approve</Button>}
                       {r.status === 'approved' && <Button disabled={busy === r.id} onClick={() => void move(r, 'reimbursed')}>Mark reimbursed</Button>}
                       {(r.status === 'pending' || r.status === 'approved') && (
                         <Button variant="danger" disabled={busy === r.id} onClick={() => setDenying(r)}>Deny</Button>
                       )}
-                    </div>
+                    </div>}
                   </div>
                 </Card>
               </li>

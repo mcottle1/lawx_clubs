@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { clubWhere } from '../../lib/constants'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { notify } from '../../lib/notify'
@@ -62,7 +63,7 @@ export default function Thread({
 
   if (conv === undefined) return <Spinner />
   if (conv === null) return <Alert>Conversation not found.</Alert>
-  const other = side === 'club' ? conv.partner_name : `${conv.club_name} (${conv.university_name})`
+  const other = side === 'club' ? conv.partner_name : `${conv.club_name} (${clubWhere(conv.department_name, conv.university_name)})`
   const mailto = side === 'club' ? conv.partner_email : conv.club_email
 
   return (

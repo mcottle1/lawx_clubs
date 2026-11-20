@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { MIN_PASSWORD_LENGTH } from '../lib/constants'
 import { supabase } from '../lib/supabase'
-import type { University } from '../lib/types'
+import type { Department, University } from '../lib/types'
 import { siteRootUrl } from '../lib/urls'
 import { signUpErrorMessage } from '../lib/authErrors'
 import { Alert, Button, Card, Field, inputClass } from '../components/ui'
@@ -11,8 +11,11 @@ export default function SignupClub() {
   const navigate = useNavigate()
   const [universities, setUniversities] = useState<University[] | null>(null)
   const [form, setForm] = useState({
-    club_name: '', university_id: '', email: '', password: '', confirm: '', initial_budget: '', description: '',
+    club_name: '', university_id: '', department_id: '', email: '', password: '', confirm: '', initial_budget: '', description: '',
   })
+  const [departments, setDepartments] = useState<Pick<Department, 'id' | 'name'>[] | null>(null)
+  const university = universities?.find((u) => u.id === form.university_id)
+  const unit = university?.unit_label ?? 'College'
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [checkEmail, setCheckEmail] = useState(false)
@@ -23,9 +26,24 @@ export default function SignupClub() {
       .then(({ data }) => setUniversities((data as University[]) ?? []))
   }, [])
 
+  // Colleges of the chosen university that have an administrator.
+  useEffect(() => {
+    if (!form.university_id) return
+    let cancelled = false
+    supabase.from('departments').select('id, name').eq('university_id', form.university_id).eq('is_participating', true).order('name')
+      .then(({ data }) => {
+        if (cancelled) return
+        const list = (data as Pick<Department, 'id' | 'name'>[]) ?? []
+        setDepartments(list)
+        if (list.length === 1) setForm((f) => ({ ...f, department_id: list[0].id }))
+      })
+    return () => { cancelled = true }
+  }, [form.university_id])
+
   function validate(): string | null {
     if (!form.club_name.trim()) return 'Enter your club name.'
     if (!form.university_id) return 'Choose your university.'
+    if (!form.department_id) return `Choose your ${unit.toLowerCase()}.`
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Enter a valid club email.'
     if (form.password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
     if (form.password !== form.confirm) return 'Passwords do not match.'
@@ -50,6 +68,7 @@ export default function SignupClub() {
           role: 'club',
           club_name: form.club_name.trim(),
           university_id: form.university_id,
+          department_id: form.department_id,
           initial_budget: form.initial_budget,
           description: form.description.trim(),
         },
@@ -88,7 +107,8 @@ export default function SignupClub() {
         </Field>
         <Field label="University" required hint="Only universities whose administrator has joined are listed.">
           {(id) => (
-            <select id={id} className={inputClass} value={form.university_id} onChange={set('university_id')} disabled={!universities}>
+            <select id={id} className={inputClass} value={form.university_id} disabled={!universities}
+              onChange={(e) => { setDepartments(null); setForm({ ...form, university_id: e.target.value, department_id: '' }) }}>
               <option value="">{universities ? 'Choose your university…' : 'Loading…'}</option>
               {universities?.map((u) => (
                 <option key={u.id} value={u.id}>{u.name}{u.state ? ` (${u.state})` : ''}</option>
@@ -96,6 +116,16 @@ export default function SignupClub() {
             </select>
           )}
         </Field>
+        {form.university_id && (
+          <Field label={unit} required hint={`Only ${unit.toLowerCase()}s whose administrator has joined are listed.`}>
+            {(id) => (
+              <select id={id} className={inputClass} value={form.department_id} onChange={set('department_id')} disabled={!departments}>
+                <option value="">{departments ? `Choose your ${unit.toLowerCase()}…` : 'Loading…'}</option>
+                {departments?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            )}
+          </Field>
+        )}
         {universities?.length === 0 && (
           <Alert kind="warning">No universities have joined yet. Ask your university's club administrator to contact us.</Alert>
         )}

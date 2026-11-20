@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { clubWhere } from '../../lib/constants'
 import { Link } from 'react-router-dom'
 import { logoUrl } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
@@ -25,7 +26,7 @@ export default function Inbox({ side }: { side: 'club' | 'partner' }) {
         ) : (
           <ul className="divide-y divide-slate-100">
             {items.map((c) => {
-              const name = side === 'club' ? c.partner_name : `${c.club_name} · ${c.university_name}`
+              const name = side === 'club' ? c.partner_name : `${c.club_name} · ${clubWhere(c.department_name, c.university_name)}`
               const logo = logoUrl(side === 'club' ? c.partner_logo_path : c.club_logo_path)
               return (
                 <li key={c.id}>

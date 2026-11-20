@@ -1,4 +1,5 @@
-export type Role = 'club' | 'partner' | 'university_admin' | 'site_admin'
+/** 'university_admin' is a COLLEGE (department) admin; 'org_admin' runs a whole university. */
+export type Role = 'club' | 'partner' | 'university_admin' | 'org_admin' | 'site_admin'
 
 export type InstitutionType =
   | 'university' | 'law_school' | 'medical_school' | 'graduate_school' | 'community_college' | 'other'
@@ -19,12 +20,42 @@ export interface University {
   state: string | null
   type: InstitutionType
   is_participating: boolean
+  /** What the university calls its units. */
+  unit_label: UnitLabel
+}
+
+export type UnitLabel = 'College' | 'School' | 'Department'
+
+/** A college/school/department inside a university; clubs belong to one. */
+export interface Department {
+  id: string
+  university_id: string
+  name: string
+  is_participating: boolean
+  created_at: string
+}
+
+export interface DepartmentSettings {
+  department_id: string
+  scheduling_url: string | null
+  scheduling_instructions: string | null
+  require_message_approval: boolean
+  require_opportunity_approval: boolean
+  require_proposal_approval: boolean
+}
+
+export interface AdminRow {
+  id: string
+  user_id: string
+  email: string
+  created_at: string
 }
 
 export interface Club {
   id: string
   user_id: string
   university_id: string
+  department_id: string
   name: string
   email: string
   description: string
@@ -47,18 +78,6 @@ export interface Partner {
   open_to_sponsorships: boolean
   logo_path: string | null
   website: string | null
-}
-
-export interface UniversityAdmin {
-  id: string
-  user_id: string
-  university_id: string
-  contact_email: string
-  scheduling_url: string | null
-  scheduling_instructions: string | null
-  require_message_approval: boolean
-  require_opportunity_approval: boolean
-  require_proposal_approval: boolean
 }
 
 /** Fields shared by things a university admin reviews (opportunities, first messages). */
@@ -176,6 +195,8 @@ export interface OpportunityCard extends Opportunity {
   event_name: string | null
   event_starts_at: string | null
   event_time_zone: string | null
+  department_id: string
+  department_name: string
 }
 
 /** Row of the proposal_details view. */
@@ -208,6 +229,8 @@ export interface ProposalDetail {
   event_starts_at: string | null
   event_time_zone: string | null
   event_approval_status: ApprovalStatus | null
+  department_id: string
+  department_name: string
 }
 
 export interface ConversationListItem {
@@ -231,6 +254,7 @@ export interface ConversationListItem {
   last_message: string | null
   approval_status: ApprovalStatus
   review_note: string | null
+  department_name: string
 }
 
 /** A club's first message to a partner, as the university admin reviews it. */
@@ -251,6 +275,8 @@ export interface MessageReview {
   partner_state: string
   event_name: string | null
   body: string | null
+  department_id: string
+  department_name: string
 }
 
 export interface Message {
@@ -277,6 +303,7 @@ export interface PartnerEvent {
   club_id: string
   club_name: string
   university_name: string
+  department_name: string
 }
 
 export type ReceiptStatus = 'pending' | 'approved' | 'reimbursed' | 'denied'
@@ -310,6 +337,7 @@ export interface PartnerEventResult {
   offers_redeemed: number | null
   notes: string | null
   submitted_at: string
+  department_name: string
 }
 
 export interface ClubMember {

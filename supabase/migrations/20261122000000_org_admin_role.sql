@@ -1,0 +1,12 @@
+-- Organization administrators (a university's top-level admin). Kept in its
+-- own migration: Postgres can't use a new enum value in the transaction that
+-- adds it.
+--
+-- Roles from here on:
+--   org_admin         runs a university: creates its colleges, invites college
+--                     admins, oversees everything, steps in where a college has
+--                     no admin
+--   university_admin  a COLLEGE (department) admin. The value keeps its old name
+--                     so existing accounts and links keep working; the app calls
+--                     it "College admin" (or the university's own word for it).
+alter type public.user_role add value if not exists 'org_admin';

@@ -4,9 +4,17 @@ import { MIN_PASSWORD_LENGTH } from '../lib/constants'
 import { callFunction, supabase } from '../lib/supabase'
 import { Alert, Button, Card, Field, inputClass, Spinner } from '../components/ui'
 
-interface Preview { email: string; university_name: string }
+interface Preview {
+  email: string
+  kind: 'org' | 'department'
+  university_name: string
+  department_name: string | null
+  unit_label: string
+  /** The first admin of a college also says how its clubs book rooms. */
+  needs_scheduling: boolean
+}
 
-/** University admin opens their emailed invite link: set password + scheduling info. */
+/** An invited organization or college admin opens their emailed link: set a password (+ room booking info). */
 export default function AdminInvite() {
   const { token = '' } = useParams()
   const navigate = useNavigate()
@@ -27,7 +35,7 @@ export default function AdminInvite() {
     e.preventDefault()
     if (form.password.length < MIN_PASSWORD_LENGTH) return setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
     if (form.password !== form.confirm) return setError('Passwords do not match.')
-    if (!form.scheduling_url.trim() && !form.scheduling_instructions.trim()) {
+    if (preview?.needs_scheduling && !form.scheduling_url.trim() && !form.scheduling_instructions.trim()) {
       return setError('Add a link to your space-scheduling system, written instructions, or both.')
     }
     if (form.scheduling_url.trim() && !/^https?:\/\/\S+/i.test(form.scheduling_url.trim())) {
@@ -46,7 +54,7 @@ export default function AdminInvite() {
       await supabase.auth.signOut() // in case someone else was logged in on this browser
       const { error: loginError } = await supabase.auth.signInWithPassword({ email: res.email, password: form.password })
       if (loginError) throw new Error('Your account is ready. Please log in.')
-      navigate('/university-admin', { replace: true })
+      navigate(res.kind === 'org' ? '/org-admin' : '/university-admin', { replace: true })
     } catch (err) {
       setError((err as Error).message)
       setBusy(false)
@@ -67,7 +75,11 @@ export default function AdminInvite() {
     <Card className="mx-auto max-w-xl">
       <h1 className="text-xl font-semibold">Set up your administrator account</h1>
       <p className="mt-1 text-sm text-slate-600">
-        You're joining as the club administrator for <strong>{preview.university_name}</strong>.
+        {preview.kind === 'org' ? (
+          <>You're joining as an organization administrator for <strong>{preview.university_name}</strong>. You'll add its {preview.unit_label.toLowerCase()}s and invite their administrators.</>
+        ) : (
+          <>You're joining as a club administrator for <strong>{preview.department_name}</strong> at <strong>{preview.university_name}</strong>.</>
+        )}
       </p>
       <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
         {error && <Alert>{error}</Alert>}
@@ -82,7 +94,7 @@ export default function AdminInvite() {
             {(id) => <input id={id} type="password" autoComplete="new-password" className={inputClass} value={form.confirm} onChange={set('confirm')} />}
           </Field>
         </div>
-        <fieldset className="space-y-4 rounded-md border border-slate-200 p-4">
+        {preview.needs_scheduling && <fieldset className="space-y-4 rounded-md border border-slate-200 p-4">
           <legend className="px-1 text-sm font-medium">How clubs book rooms <span className="font-normal text-slate-500">(one or both; editable later)</span></legend>
           <Field label="Link to your space-scheduling system">
             {(id) => <input id={id} type="url" placeholder="https://" className={inputClass} value={form.scheduling_url} onChange={set('scheduling_url')} />}
@@ -90,7 +102,7 @@ export default function AdminInvite() {
           <Field label="Written scheduling instructions">
             {(id) => <textarea id={id} rows={4} maxLength={5000} className={inputClass} value={form.scheduling_instructions} onChange={set('scheduling_instructions')} />}
           </Field>
-        </fieldset>
+        </fieldset>}
         <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Setting up…' : 'Activate account'}</Button>
       </form>
     </Card>

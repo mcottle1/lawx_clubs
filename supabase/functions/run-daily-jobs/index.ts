@@ -6,7 +6,7 @@
 //
 // Jobs (all idempotent — safe to run twice on the same day):
 //   1. "Find a sponsor" reminders  (events.partner_reminder_days)
-//   2. "Book a room" reminders     (events.location_reminder_days, with the university's
+//   2. "Book a room" reminders     (events.location_reminder_days, with the college's
 //                                   scheduling link/instructions)
 //   3. Post-event report request    (the day after the event) + "Submit report" to-do
 //   4. One report reminder          (3 days after the request, if still no report)
@@ -58,7 +58,7 @@ interface EventRow {
   report_requested_at: string | null
   report_reminder_sent_at: string | null
   created_at: string
-  clubs: { name: string; email: string; university_id: string } | null
+  clubs: { name: string; email: string; university_id: string; department_id: string } | null
   event_reports: { id: string }[] | { id: string } | null
 }
 
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
   const select = 'id, name, club_id, starts_at, ends_at, time_zone, approval_status, partner_id, outside_sponsor_name, location, ' +
     'partner_reminder_days, location_reminder_days, partner_reminder_sent_at, location_reminder_sent_at, ' +
-    'report_requested_at, report_reminder_sent_at, created_at, clubs(name, email, university_id), event_reports(id)'
+    'report_requested_at, report_reminder_sent_at, created_at, clubs(name, email, university_id, department_id), event_reports(id)'
 
   // ---------------------------------------------------------------- 1 & 2
   const { data: upcoming, error: upErr } = await db.from('events').select(select)
@@ -83,13 +83,13 @@ Deno.serve(async (req) => {
   if (upErr) return json({ error: upErr.message }, 500)
 
   const schedulingCache = new Map<string, { scheduling_url: string | null; scheduling_instructions: string | null } | null>()
-  async function schedulingFor(universityId: string) {
-    if (!schedulingCache.has(universityId)) {
-      const { data } = await db.from('university_admins').select('scheduling_url, scheduling_instructions')
-        .eq('university_id', universityId).maybeSingle()
-      schedulingCache.set(universityId, data ?? null)
+  async function schedulingFor(departmentId: string) {
+    if (!schedulingCache.has(departmentId)) {
+      const { data } = await db.from('department_settings').select('scheduling_url, scheduling_instructions')
+        .eq('department_id', departmentId).maybeSingle()
+      schedulingCache.set(departmentId, data ?? null)
     }
-    return schedulingCache.get(universityId)!
+    return schedulingCache.get(departmentId)!
   }
 
   for (const e of (upcoming ?? []) as unknown as EventRow[]) {
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       actions.push(`location reminder → ${e.clubs.email} (${e.name})`)
       counts.location_reminders++
       if (!dryRun) {
-        const s = await schedulingFor(e.clubs.university_id)
+        const s = await schedulingFor(e.clubs.department_id)
         const how = [
           s?.scheduling_url ? `Book a room here: ${s.scheduling_url}` : null,
           s?.scheduling_instructions ? `How to book a room:\n${s.scheduling_instructions}` : null,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabase'
-import type { Club } from '../../lib/types'
+import type { Club, UnitLabel } from '../../lib/types'
 import { Alert, Spinner } from '../../components/ui'
 import { ClubContext, type ClubInfo } from './ClubContext'
 
@@ -23,17 +23,23 @@ export default function ClubLayout() {
   const [info, setInfo] = useState<Omit<ClubInfo, 'refreshClub'> | null | undefined>(undefined)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('clubs').select('*, universities(name, city, state)').eq('user_id', userId).maybeSingle()
+    const { data } = await supabase.from('clubs')
+      .select('*, universities(name, city, state, unit_label), departments(name)').eq('user_id', userId).maybeSingle()
     if (!data) return setInfo(null)
-    const { universities, ...club } = data as Club & { universities: { name: string; city: string | null; state: string | null } | null }
-    const { data: admin } = await supabase
-      .from('university_admins').select('scheduling_url, scheduling_instructions, require_message_approval, require_opportunity_approval')
-      .eq('university_id', club.university_id).maybeSingle()
+    const { universities, departments, ...club } = data as Club & {
+      universities: { name: string; city: string | null; state: string | null; unit_label: UnitLabel } | null
+      departments: { name: string } | null
+    }
+    const { data: settings } = await supabase.from('department_settings')
+      .select('scheduling_url, scheduling_instructions, require_message_approval, require_opportunity_approval')
+      .eq('department_id', club.department_id).maybeSingle()
     setInfo({
       club, universityName: universities?.name ?? '', universityCity: universities?.city ?? null,
       universityState: universities?.state ?? null, userId,
-      scheduling: admin ? { scheduling_url: admin.scheduling_url, scheduling_instructions: admin.scheduling_instructions } : null,
-      approvals: { message: admin?.require_message_approval ?? false, opportunity: admin?.require_opportunity_approval ?? false },
+      departmentName: departments?.name ?? '', unitLabel: universities?.unit_label ?? 'College',
+      scheduling: settings && (settings.scheduling_url || settings.scheduling_instructions)
+        ? { scheduling_url: settings.scheduling_url, scheduling_instructions: settings.scheduling_instructions } : null,
+      approvals: { message: settings?.require_message_approval ?? false, opportunity: settings?.require_opportunity_approval ?? false },
     })
   }, [userId])
 

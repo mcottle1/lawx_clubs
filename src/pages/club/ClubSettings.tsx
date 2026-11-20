@@ -1,3 +1,4 @@
+import { clubWhere } from '../../lib/constants'
 import { useState, type FormEvent } from 'react'
 import { todayIso } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
@@ -5,7 +6,7 @@ import { Alert, Button, Card, Field, inputClass, PageHeader } from '../../compon
 import { useClub } from './ClubContext'
 
 export default function ClubSettings() {
-  const { club, universityName, refreshClub } = useClub()
+  const { club, universityName, refreshClub, departmentName } = useClub()
   const [form, setForm] = useState({
     name: club.name,
     description: club.description,
@@ -46,7 +47,7 @@ export default function ClubSettings() {
 
   return (
     <>
-      <PageHeader title="Club settings" subtitle={`${universityName} · login ${club.email}`} />
+      <PageHeader title="Club settings" subtitle={`${clubWhere(departmentName, universityName)} · login ${club.email}`} />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
         <Card className="space-y-4">

@@ -1,3 +1,4 @@
+import { clubWhere } from '../../lib/constants'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Receipt, Todo, ApprovalStatus } from '../../lib/types'
@@ -14,7 +15,7 @@ import PendingApprovals, { type ReviewItem } from './dashboard/PendingApprovals'
 import TodoList from './dashboard/TodoList'
 
 export default function ClubDashboard() {
-  const { club, universityName } = useClub()
+  const { club, universityName, departmentName } = useClub()
   const [budget, setBudget] = useState<BudgetSummary | null>(null)
   const [counts, setCounts] = useState<MemberCount[]>([])
   const [events, setEvents] = useState<ClubEvent[]>([])
@@ -68,7 +69,7 @@ export default function ClubDashboard() {
 
   return (
     <>
-      <PageHeader title={club.name} subtitle={universityName} actions={<>
+      <PageHeader title={club.name} subtitle={clubWhere(departmentName, universityName)} actions={<>
         <ButtonLink to="/club/partnerships" variant="secondary">Find sponsors</ButtonLink>
         <ButtonLink to="/club/events/new">New event</ButtonLink>
       </>} />

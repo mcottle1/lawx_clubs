@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { supportLabel } from '../lib/constants'
+import { clubWhere, supportLabel } from '../lib/constants'
 import { publicUrl } from '../lib/files'
 import { formatEventRange, usd } from '../lib/format'
 import { logoUrl } from '../lib/storage'
@@ -18,7 +18,7 @@ export default function OpportunityCardView({ o, to, full = false }: { o: Opport
         <h3 className="font-semibold">{title}</h3>
         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
           {clubLogo && <img src={clubLogo} alt="" className="h-5 w-5 rounded object-cover" />}
-          {o.club_name} · {o.university_name}
+          {o.club_name} · {clubWhere(o.department_name, o.university_name)}
         </p>
         <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
           {o.event_starts_at && o.event_time_zone && (

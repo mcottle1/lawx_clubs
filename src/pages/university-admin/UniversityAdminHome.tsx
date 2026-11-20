@@ -1,34 +1,44 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabase'
-import type { UniversityAdmin } from '../../lib/types'
+import type { AdminRow, DepartmentSettings, UnitLabel } from '../../lib/types'
 import { Alert, Button, Card, Field, inputClass, Spinner } from '../../components/ui'
 import ColorSettings from './ColorSettings'
 
-type AdminRow = UniversityAdmin & { universities: { name: string } | null }
+type College = {
+  department_id: string
+  departments: { name: string; universities: { name: string; unit_label: UnitLabel } | null } | null
+}
 
-/** University settings: what needs approval, plus room-scheduling info for clubs. */
+/** College settings: room-booking info, what needs approval, colors, co-admins. */
 export default function UniversityAdminHome() {
   const { session } = useAuth()
-  const [row, setRow] = useState<AdminRow | null | undefined>(undefined)
+  const [college, setCollege] = useState<College | null | undefined>(undefined)
+  const [settings, setSettings] = useState<DepartmentSettings | null>(null)
+  const [admins, setAdmins] = useState<AdminRow[]>([])
   const [clubCount, setClubCount] = useState<number | null>(null)
-  const [form, setForm] = useState({ contact_email: '', scheduling_url: '', scheduling_instructions: '' })
+  const [form, setForm] = useState({ scheduling_url: '', scheduling_instructions: '' })
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value })
 
   useEffect(() => {
-    supabase.from('university_admins').select('*, universities(name)').eq('user_id', session!.user.id).maybeSingle()
-      .then(({ data }) => {
-        const r = data as AdminRow | null
-        setRow(r)
-        if (r) setForm({
-          contact_email: r.contact_email,
-          scheduling_url: r.scheduling_url ?? '',
-          scheduling_instructions: r.scheduling_instructions ?? '',
-        })
-      })
-    // RLS limits this count to the admin's own university.
+    void (async () => {
+      const { data } = await supabase.from('department_admins')
+        .select('department_id, departments(name, universities(name, unit_label))').eq('user_id', session!.user.id).maybeSingle()
+      const c = data as College | null
+      setCollege(c)
+      if (!c) return
+      const [s, a] = await Promise.all([
+        supabase.from('department_settings').select('*').eq('department_id', c.department_id).single(),
+        supabase.from('department_admins').select('id, user_id, email, created_at').eq('department_id', c.department_id).order('created_at'),
+      ])
+      const st = s.data as DepartmentSettings | null
+      setSettings(st)
+      setAdmins((a.data as AdminRow[]) ?? [])
+      if (st) setForm({ scheduling_url: st.scheduling_url ?? '', scheduling_instructions: st.scheduling_instructions ?? '' })
+    })()
+    // RLS limits this count to the admin's own college.
     supabase.from('clubs').select('id', { count: 'exact', head: true }).then(({ count }) => setClubCount(count ?? 0))
   }, [session])
 
@@ -38,36 +48,43 @@ export default function UniversityAdminHome() {
     const url = form.scheduling_url.trim()
     const instructions = form.scheduling_instructions.trim()
     if (!url && !instructions) return setMsg({ kind: 'error', text: 'Provide a scheduling link, instructions, or both.' })
-    if (url && !/^https?:\/\/\S+/i.test(url)) return setMsg({ kind: 'error', text: 'The link must start with http:// or https://' })
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())) return setMsg({ kind: 'error', text: 'Enter a valid contact email.' })
+    if (url && !/^https?:\/\/\S+$/i.test(url)) return setMsg({ kind: 'error', text: 'The link must start with http:// or https://' })
     setBusy(true)
-    const { error } = await supabase.from('university_admins').update({
-      contact_email: form.contact_email.trim(),
+    const { error } = await supabase.from('department_settings').update({
       scheduling_url: url || null,
       scheduling_instructions: instructions || null,
-    }).eq('id', row!.id)
+    }).eq('department_id', college!.department_id)
     setBusy(false)
     setMsg(error ? { kind: 'error', text: error.message } : { kind: 'success', text: 'Saved.' })
   }
 
-  if (row === undefined) return <Spinner />
-  if (row === null) return <Alert>We couldn't find your administrator record.</Alert>
+  if (college === undefined || (college && !settings)) return <Spinner />
+  if (college === null || !settings) return <Alert>We couldn't find your administrator record.</Alert>
+  const unit = college.departments?.universities?.unit_label ?? 'College'
 
   return (
     <>
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <h2 className="text-sm font-medium text-slate-600">Clubs registered</h2>
-          <p className="mt-1 text-2xl font-semibold">{clubCount ?? '…'}</p>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <h2 className="text-sm font-medium text-slate-600">Clubs registered</h2>
+            <p className="mt-1 text-2xl font-semibold">{clubCount ?? '…'}</p>
+          </Card>
+          <Card>
+            <h2 className="text-sm font-medium text-slate-600">{unit} admins</h2>
+            <ul className="mt-2 space-y-1 text-sm">
+              {admins.map((a) => (
+                <li key={a.id} className="truncate">{a.email}{a.user_id === session!.user.id && <span className="text-slate-500"> (you)</span>}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">Approval emails go to every admin. Your university’s organization admin can add or remove admins.</p>
+          </Card>
+        </div>
         <Card className="md:col-span-2">
           <h2 className="font-medium">Room scheduling for clubs</h2>
           <p className="mt-1 text-sm text-slate-600">Clubs see this when an event still needs a location.</p>
           <form onSubmit={onSubmit} className="mt-4 space-y-4" noValidate>
             {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
-            <Field label="Contact email">
-              {(id) => <input id={id} type="email" className={inputClass} value={form.contact_email} onChange={set('contact_email')} />}
-            </Field>
             <Field label="Scheduling system link">
               {(id) => <input id={id} type="url" placeholder="https://" className={inputClass} value={form.scheduling_url} onChange={set('scheduling_url')} />}
             </Field>
@@ -78,8 +95,8 @@ export default function UniversityAdminHome() {
           </form>
         </Card>
       </div>
-      <ApprovalSettings row={row} onSaved={(r) => setRow({ ...row, ...r })} />
-      <ColorSettings />
+      <ApprovalSettings row={settings} onSaved={(r) => setSettings({ ...settings, ...r })} />
+      <ColorSettings scope="college" universityName={college.departments?.universities?.name ?? 'your university'} />
     </>
   )
 }
@@ -103,7 +120,7 @@ const TOGGLES: { key: Toggle; label: string; hint: string }[] = [
   },
 ]
 
-function ApprovalSettings({ row, onSaved }: { row: AdminRow; onSaved: (r: Pick<AdminRow, Toggle>) => void }) {
+function ApprovalSettings({ row, onSaved }: { row: DepartmentSettings; onSaved: (r: Pick<DepartmentSettings, Toggle>) => void }) {
   const [values, setValues] = useState<Record<Toggle, boolean>>({
     require_message_approval: row.require_message_approval,
     require_opportunity_approval: row.require_opportunity_approval,
@@ -117,7 +134,7 @@ function ApprovalSettings({ row, onSaved }: { row: AdminRow; onSaved: (r: Pick<A
     e.preventDefault()
     setBusy(true)
     setMsg(null)
-    const { error } = await supabase.from('university_admins').update(values).eq('id', row.id)
+    const { error } = await supabase.from('department_settings').update(values).eq('department_id', row.department_id)
     setBusy(false)
     if (error) return setMsg({ kind: 'error', text: error.message })
     onSaved(values)

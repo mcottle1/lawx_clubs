@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { clubWhere } from '../../lib/constants'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../../components/Modal'
 import OpportunityCardView from '../../components/OpportunityCardView'
@@ -29,7 +30,7 @@ export default function PartnerOpportunity() {
 
   return (
     <>
-      <PageHeader title={o.title} subtitle={`${o.club_name} · ${o.university_name}`} actions={<Button variant="secondary" onClick={() => setAsking(true)}>Ask a question</Button>} />
+      <PageHeader title={o.title} subtitle={`${o.club_name} · ${clubWhere(o.department_name, o.university_name)}`} actions={<Button variant="secondary" onClick={() => setAsking(true)}>Ask a question</Button>} />
       <div className="space-y-4">
         <OpportunityCardView o={o} full />
         <Card>

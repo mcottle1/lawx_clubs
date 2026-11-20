@@ -23,10 +23,11 @@ async function run(query = '') {
 
 // --- fixtures -----------------------------------------------------------------
 const { data: byu } = await db.from('universities').select('id').eq('name', 'Brigham Young University').single()
+const { data: college } = await db.from('departments').select('id').eq('university_id', byu.id).eq('is_participating', true).limit(1).single()
 const email = `${tag}@example.com`
 const { data: u, error: uErr } = await db.auth.admin.createUser({
   email, password: 'password123', email_confirm: true,
-  user_metadata: { role: 'club', club_name: `Daily Jobs Club ${tag}`, university_id: byu.id, initial_budget: '1000' },
+  user_metadata: { role: 'club', club_name: `Daily Jobs Club ${tag}`, university_id: byu.id, department_id: college.id, initial_budget: '1000' },
 })
 if (uErr) throw uErr
 const { data: club } = await db.from('clubs').select('id').eq('user_id', u.user.id).single()

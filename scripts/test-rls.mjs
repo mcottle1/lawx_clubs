@@ -19,6 +19,8 @@ const byu = unis.find((u) => u.name === 'Brigham Young University')
 // Any university that isn't participating (earlier test runs may have activated some).
 const utah = unis.find((u) => !u.is_participating && u.name !== 'Utah State University')
 check('BYU is participating', byu?.is_participating === true)
+const { data: byuLaw } = await anon.from('departments').select('id, is_participating').eq('university_id', byu.id).eq('name', 'BYU Law').single()
+check('BYU Law (a college with an admin) is participating', byuLaw?.is_participating === true)
 
 // --- sign-ups ---------------------------------------------------------------
 async function signUp(email, data) {
@@ -27,7 +29,7 @@ async function signUp(email, data) {
   if (!error) await c.auth.signInWithPassword({ email, password: 'password123' })
   return { c, error }
 }
-const club = await signUp(`club${stamp}@example.com`, { role: 'club', club_name: 'Test Club', university_id: byu.id, initial_budget: '1500', description: 'hi' })
+const club = await signUp(`club${stamp}@example.com`, { role: 'club', club_name: 'Test Club', university_id: byu.id, department_id: byuLaw.id, initial_budget: '1500', description: 'hi' })
 check('club sign-up succeeds', !club.error, club.error?.message)
 const badUni = await signUp(`club2${stamp}@example.com`, { role: 'club', club_name: 'X', university_id: utah.id })
 check('club sign-up at non-participating university fails', !!badUni.error)
@@ -54,8 +56,8 @@ const { data: uniUpd } = await club.c.from('clubs').update({ university_id: utah
 check('club cannot move to another university', !uniUpd?.length || uniUpd[0].university_id === byu.id)
 const { data: nameUpd } = await club.c.from('clubs').update({ name: 'Renamed Club' }).eq('id', myClub[0].id).select()
 check('club can rename itself', nameUpd?.[0]?.name === 'Renamed Club')
-const { data: clubSeesAdmin } = await club.c.from('university_admins').select('scheduling_url')
-check('club reads its university scheduling info', clubSeesAdmin?.length === 1)
+const { data: clubSeesAdmin } = await club.c.from('department_settings').select('scheduling_url')
+check('club reads its college scheduling info', clubSeesAdmin?.length === 1)
 const { data: clubInv } = await club.c.from('admin_invites').select('id')
 check('club cannot read invites', (clubInv ?? []).length === 0)
 const { error: uniWrite } = await club.c.from('universities').update({ is_participating: true }).eq('id', utah.id)
@@ -77,7 +79,7 @@ const admin = client()
 await admin.auth.signInWithPassword({ email: 'admin@byu.example', password: 'password123' })
 const { data: aClubs } = await admin.from('clubs').select('id, university_id')
 check('BYU admin sees BYU clubs only', aClubs?.length >= 1 && aClubs.every((c) => c.university_id === byu.id))
-const { data: aUpd } = await admin.from('university_admins').update({ scheduling_instructions: 'Email rooms@byu.example' }).eq('university_id', byu.id).select()
+const { data: aUpd } = await admin.from('department_settings').update({ scheduling_instructions: 'Email rooms@byu.example' }).eq('department_id', byuLaw.id).select()
 check('admin updates own scheduling info', aUpd?.length === 1)
 
 // --- site admin + deactivation ---------------------------------------------
@@ -110,7 +112,7 @@ console.log('\n--- Phase 2 ---')
 const service = createClient(URL, st.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 const clubA = club.c
 const { data: clubARow } = await clubA.from('clubs').select('id, user_id').single()
-const clubB = await signUp(`clubb${stamp}@example.com`, { role: 'club', club_name: 'Club B', university_id: byu.id, initial_budget: '500' })
+const clubB = await signUp(`clubb${stamp}@example.com`, { role: 'club', club_name: 'Club B', university_id: byu.id, department_id: byuLaw.id, initial_budget: '500' })
 const { data: clubBRow } = await clubB.c.from('clubs').select('id').single()
 const inDays = (d, h = 12) => { const t = new Date(); t.setDate(t.getDate() + d); t.setHours(h, 0, 0, 0); return t.toISOString() }
 
@@ -225,15 +227,19 @@ check('club cannot report on an event that has not happened', !!repIns)
 console.log('\n--- Phase 3 ---')
 const partnerC = partner.c
 // This section covers the flow without approval steps; the "Approvals" section turns them on.
-const { error: settingsErr } = await admin.from('university_admins')
+const { error: settingsErr } = await admin.from('department_settings')
   .update({ require_message_approval: false, require_opportunity_approval: false, require_proposal_approval: false })
-  .eq('university_id', byu.id)
+  .eq('department_id', byuLaw.id)
 check('admin turns approval settings off', !settingsErr, settingsErr?.message)
 const { data: partnerRow } = await partnerC.from('partners').select('id').eq('email', `partner${stamp}@example.com`).single()
 
 // A second university with its own admin (idempotent across runs).
 const { data: usu } = await anon.from('universities').select('id').eq('name', 'Utah State University').single()
-const inv2 = await site.functions.invoke('invite-university-admin', { body: { university_id: usu.id, email: 'admin@usu.example' } })
+// (a college admin at Utah State; the site admin adds the college)
+let { data: usuLaw } = await site.from('departments').select('id').eq('university_id', usu.id).eq('name', 'USU College').maybeSingle()
+if (!usuLaw) usuLaw = (await site.from('departments').insert({ university_id: usu.id, name: 'USU College' }).select('id').single()).data
+const { data: usuExisting } = await site.from('department_admins').select('id').eq('email', 'admin@usu.example').maybeSingle()
+const inv2 = usuExisting ? { error: 'exists' } : await site.functions.invoke('invite-university-admin', { body: { kind: 'department', department_id: usuLaw.id, email: 'admin@usu.example' } })
 if (!inv2.error) {
   await site.functions.invoke('accept-admin-invite', { body: { action: 'accept', token: inv2.data.link.split('/').pop(), password: 'password123', scheduling_instructions: 'Email rooms@usu.example' } })
 }
@@ -536,11 +542,11 @@ check('uploaded attachments are deleted after sending', !(leftover ?? []).some((
 // =============================================================================
 console.log('\n--- Approvals ---')
 {
-const { data: clubUpdSettings } = await clubA.from('university_admins').update({ require_message_approval: false }).eq('university_id', byu.id).select()
+const { data: clubUpdSettings } = await clubA.from('department_settings').update({ require_message_approval: false }).eq('department_id', byuLaw.id).select()
 check('clubs cannot change approval settings', (clubUpdSettings ?? []).length === 0)
-const { data: pSettings } = await partnerC.from('university_admins').select('require_message_approval')
+const { data: pSettings } = await partnerC.from('department_settings').select('require_message_approval')
 check('partners cannot read approval settings', (pSettings ?? []).length === 0)
-await admin.from('university_admins').update({ require_message_approval: true, require_opportunity_approval: true, require_proposal_approval: false }).eq('university_id', byu.id)
+await admin.from('department_settings').update({ require_message_approval: true, require_opportunity_approval: true, require_proposal_approval: false }).eq('department_id', byuLaw.id)
 
 // --- first message needs approval
 const { data: convId, error: convErr } = await clubA.rpc('start_conversation', { p_partner_id: partnerRow.id, p_subject: 'Sponsor our trivia night?', p_body: 'Hi! Would you sponsor pizza?' })
@@ -605,9 +611,9 @@ check('club resubmits without changes', reOpp === 'pending')
 await admin.rpc('decide_opportunity', { p_opportunity_id: oppP.id, p_decision: 'approve' })
 
 // --- proposal screening (off by default)
-const { data: ua } = await clubA.from('university_admins').select('require_message_approval, require_opportunity_approval, require_proposal_approval').single()
+const { data: ua } = await clubA.from('department_settings').select('require_message_approval, require_opportunity_approval, require_proposal_approval').single()
 check('defaults: messages and posts on, proposal screening off (club can read)', ua && ua.require_proposal_approval === false)
-await admin.from('university_admins').update({ require_proposal_approval: true }).eq('university_id', byu.id)
+await admin.from('department_settings').update({ require_proposal_approval: true }).eq('department_id', byuLaw.id)
 const { data: spId, error: spErr } = await partnerC.rpc('submit_proposal', { p_opportunity_id: oppP.id, p_headcount: 40, p_message: 'Happy to help' })
 const spNow = async (c) => (await c.from('proposal_details').select('status, denial_reason, headcount, conversation_id').eq('id', spId)).data?.[0]
 check('with screening on, the proposal waits for the university', !spErr && (await spNow(partnerC))?.status === 'pending_review', spErr?.message)
@@ -635,7 +641,7 @@ const { data: cDenied } = await clubA.from('proposal_details').select('id').eq('
 check('a proposal denied in screening is never shown to the club', (cDenied ?? []).length === 0)
 const { error: wdErr } = await partnerC.rpc('withdraw_proposal', { p_proposal_id: spId })
 check('partner can withdraw a proposal that was sent back', !wdErr, wdErr?.message)
-await admin.from('university_admins').update({ require_proposal_approval: false }).eq('university_id', byu.id)
+await admin.from('department_settings').update({ require_proposal_approval: false }).eq('department_id', byuLaw.id)
 
 // --- events: send back, edit or resubmit
 const { data: evSb } = await clubA.from('events').insert({ club_id: clubARow.id, name: 'Trivia Night', starts_at: inDays(20), ends_at: inDays(20, 14) }).select().single()
@@ -660,26 +666,159 @@ check('admin approves it', !evApprove && (await evNow())?.approval_status === 'a
 // University colors
 // =============================================================================
 console.log('\n--- University colors ---')
+const orgAdmin = client()
+await orgAdmin.auth.signInWithPassword({ email: 'orgadmin@byu.example', password: 'password123' })
 {
   const { error: clubSet } = await clubA.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: '#ffc72c', p_fresh: '#6cace4' })
   const { error: partnerSet } = await partnerC.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: '#ffc72c', p_fresh: '#6cace4' })
-  check('clubs and partners cannot set colors', !!clubSet && !!partnerSet)
-  const { error: badHex } = await admin.rpc('set_university_theme', { p_primary: 'red', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  const { error: collegeSet } = await admin.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  check('clubs, partners and college admins cannot set the university colors', !!clubSet && !!partnerSet && !!collegeSet)
+  const { error: badHex } = await orgAdmin.rpc('set_university_theme', { p_primary: 'red', p_pop: '#ffc72c', p_fresh: '#6cace4' })
   check('colors must be #rrggbb', !!badHex)
-  const { error: partial } = await admin.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: null, p_fresh: '#6cace4' })
+  const { error: partial } = await orgAdmin.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: null, p_fresh: '#6cace4' })
   check('all three colors are set together', !!partial)
-  const { error: setErr } = await admin.rpc('set_university_theme', { p_primary: '#002E5D', p_pop: '#ffc72c', p_fresh: '#6cace4' })
-  check('admin sets its university colors', !setErr, setErr?.message)
+  const { error: setErr } = await orgAdmin.rpc('set_university_theme', { p_primary: '#002E5D', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  check('organization admin sets the university colors', !setErr, setErr?.message)
   const { data: clubTheme } = await clubA.rpc('current_university_theme')
   check('the university\'s clubs get them', clubTheme?.primary === '#002e5d' && clubTheme?.pop === '#ffc72c')
   const { data: adminTheme } = await admin.rpc('current_university_theme')
-  check('so does its admin', adminTheme?.primary === '#002e5d')
+  const { data: orgTheme } = await orgAdmin.rpc('current_university_theme')
+  check('so do its college and organization admins', adminTheme?.primary === '#002e5d' && orgTheme?.primary === '#002e5d')
   const { data: partnerTheme } = await partnerC.rpc('current_university_theme')
   const { data: usuTheme } = await usuAdmin.rpc('current_university_theme')
   check('partners and other universities do not', partnerTheme === null && usuTheme === null)
-  await admin.rpc('set_university_theme', { p_primary: null, p_pop: null, p_fresh: null })
+  // A college can override them for its own clubs.
+  const { error: ovErr } = await admin.rpc('set_department_theme', { p_primary: '#7a0019', p_pop: '#ffcc33', p_fresh: '#1b7f3b' })
+  const { data: ovClub } = await clubA.rpc('current_university_theme')
+  const { data: ovOrg } = await orgAdmin.rpc('current_university_theme')
+  check('a college admin overrides colors for its clubs only', !ovErr && ovClub?.primary === '#7a0019' && ovOrg?.primary === '#002e5d', ovErr?.message)
+  const { error: clubOv } = await clubA.rpc('set_department_theme', { p_primary: '#000000', p_pop: '#000000', p_fresh: '#000000' })
+  check('clubs cannot set college colors', !!clubOv)
+  await admin.rpc('set_department_theme', { p_primary: null, p_pop: null, p_fresh: null })
+  const { data: backClub } = await clubA.rpc('current_university_theme')
+  check('removing the override goes back to the university colors', backClub?.primary === '#002e5d')
+  await orgAdmin.rpc('set_university_theme', { p_primary: null, p_pop: null, p_fresh: null })
   const { data: resetTheme } = await clubA.rpc('current_university_theme')
-  check('admin resets to the default colors', resetTheme === null)
+  check('organization admin resets to the default colors', resetTheme === null)
+}
+
+// =============================================================================
+// Colleges and organization admins
+// =============================================================================
+console.log('\n--- Colleges ---')
+{
+  const invite = async (c, body) => {
+    const token = (await c.auth.getSession()).data.session?.access_token
+    const res = await fetch(`${URL}/functions/v1/invite-university-admin`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    return { status: res.status, body: await res.json().catch(() => ({})) }
+  }
+  const accept = async (link, extra = {}) => anon.functions.invoke('accept-admin-invite', { body: { action: 'accept', token: link.split('/').pop(), password: 'password123', ...extra } })
+
+  // Organization admin sees every club at the university; college admins only theirs.
+  const { data: orgClubs } = await orgAdmin.from('clubs').select('id, department_id')
+  check('organization admin reads all of its university\'s clubs', orgClubs?.some((c) => c.id === clubARow.id) && orgClubs?.some((c) => c.id === clubBRow.id))
+  const { data: usuSeesByu } = await usuAdmin.from('clubs').select('id').eq('id', clubARow.id)
+  check('other universities\' admins cannot', (usuSeesByu ?? []).length === 0)
+
+  // Adding colleges
+  const bizName = `BYU Business ${stamp}`
+  const { data: biz, error: bizErr } = await orgAdmin.from('departments').insert({ university_id: byu.id, name: bizName }).select().single()
+  check('organization admin adds a college', !bizErr && biz?.is_participating === false, bizErr?.message)
+  const { error: dupErr } = await orgAdmin.from('departments').insert({ university_id: byu.id, name: bizName.toUpperCase() })
+  check('college names are unique per university', dupErr?.code === '23505')
+  const { error: adminAdds } = await admin.from('departments').insert({ university_id: byu.id, name: `Nope ${stamp}` })
+  const { error: usuAdds } = await orgAdmin.from('departments').insert({ university_id: usu.id, name: `Nope ${stamp}` })
+  check('college admins (and other universities) cannot add colleges', !!adminAdds && !!usuAdds)
+  const { data: renamed } = await admin.from('departments').update({ name: 'Hacked' }).eq('id', byuLaw.id).select()
+  check('college admins cannot rename colleges', (renamed ?? []).length === 0)
+
+  // Sign-up needs a participating college of the chosen university
+  const noAdminClub = await signUp(`clubc${stamp}@example.com`, { role: 'club', club_name: 'C', university_id: byu.id, department_id: biz.id })
+  check('clubs cannot join a college without an admin', !!noAdminClub.error)
+  const wrongUni = await signUp(`clubd${stamp}@example.com`, { role: 'club', club_name: 'D', university_id: usu.id, department_id: byuLaw.id })
+  check('the college must belong to the chosen university', !!wrongUni.error)
+  const noCollege = await signUp(`clube${stamp}@example.com`, { role: 'club', club_name: 'E', university_id: byu.id })
+  check('a college is required', !!noCollege.error)
+
+  // Moving a club
+  const { error: adminMove } = await admin.rpc('move_club', { p_club_id: clubBRow.id, p_department_id: biz.id })
+  check('college admins cannot move clubs', !!adminMove)
+  const { error: crossMove } = await orgAdmin.rpc('move_club', { p_club_id: clubBRow.id, p_department_id: usuLaw.id })
+  check('clubs cannot move to another university\'s college', !!crossMove)
+  const { error: moveErr } = await orgAdmin.rpc('move_club', { p_club_id: clubBRow.id, p_department_id: biz.id })
+  check('organization admin moves a club to another college', !moveErr, moveErr?.message)
+  const { data: lawSeesB } = await admin.from('clubs').select('id').eq('id', clubBRow.id)
+  check('the old college\'s admin no longer sees it', (lawSeesB ?? []).length === 0)
+
+  // Stepping in: the organization admin acts only for colleges without an admin.
+  const { data: evB } = await service.from('events').insert({ club_id: clubBRow.id, name: `B pending ${stamp}`, starts_at: inDays(30), ends_at: inDays(30, 13) }).select().single()
+  const { data: evA } = await service.from('events').insert({ club_id: clubARow.id, name: `A pending ${stamp}`, starts_at: inDays(30), ends_at: inDays(30, 13) }).select().single()
+  const { data: orgSeesA } = await orgAdmin.from('events').select('id').eq('id', evA.id)
+  check('organization admin can see other colleges\' requests', orgSeesA?.length === 1)
+  const { error: orgDecideA } = await orgAdmin.rpc('decide_event', { p_event_id: evA.id, p_decision: 'approve' })
+  check('...but not decide them (that college has its own admin)', !!orgDecideA)
+  const { error: lawDecideB } = await admin.rpc('decide_event', { p_event_id: evB.id, p_decision: 'approve' })
+  check('the old college\'s admin cannot decide for the moved club', !!lawDecideB)
+  const { error: orgDecideB } = await orgAdmin.rpc('decide_event', { p_event_id: evB.id, p_decision: 'approve' })
+  check('organization admin decides for a college with no admin', !orgDecideB, orgDecideB?.message)
+
+  // Settings for a college
+  const { data: lawEditsBiz } = await admin.from('department_settings').update({ scheduling_instructions: 'x' }).eq('department_id', biz.id).select()
+  check('a college admin cannot change another college\'s settings', (lawEditsBiz ?? []).length === 0)
+  const { data: orgEditsBiz } = await orgAdmin.from('department_settings').update({ scheduling_instructions: 'Email biz rooms' }).eq('department_id', biz.id).select()
+  check('the organization admin can', orgEditsBiz?.length === 1)
+  const { data: bSettings } = await clubB.c.from('department_settings').select('department_id, scheduling_instructions')
+  check('a club reads only its own college\'s settings', bSettings?.length === 1 && bSettings[0].department_id === biz.id)
+
+  // Invites
+  const lawInvites = await invite(admin, { kind: 'department', department_id: biz.id, email: `x${stamp}@example.com` })
+  check('college admins cannot invite admins', lawInvites.status === 403, JSON.stringify(lawInvites))
+  const orgInvitesOrg = await invite(orgAdmin, { kind: 'org', university_id: byu.id, email: `y${stamp}@example.com` })
+  check('organization admins cannot invite organization admins', orgInvitesOrg.status === 403)
+  const orgInvitesUsu = await invite(orgAdmin, { kind: 'department', department_id: usuLaw.id, email: `z${stamp}@example.com` })
+  check('organization admins cannot invite for another university', orgInvitesUsu.status === 403)
+  const bizInvite = await invite(orgAdmin, { kind: 'department', department_id: biz.id, email: `biz${stamp}@example.com` })
+  check('organization admin invites a college admin', bizInvite.status === 200 && !!bizInvite.body.link, JSON.stringify(bizInvite.body))
+  const { data: preview } = await anon.functions.invoke('accept-admin-invite', { body: { action: 'preview', token: bizInvite.body.link.split('/').pop() } })
+  check('the invite says which college it is for', preview?.kind === 'department' && preview?.department_name === bizName && preview?.needs_scheduling === false)
+  const { error: accErr } = await accept(bizInvite.body.link)
+  check('the invited college admin accepts', !accErr, accErr?.message)
+  const { data: bizNow } = await anon.from('departments').select('is_participating').eq('id', biz.id).single()
+  check('the college now accepts club sign-ups', bizNow?.is_participating === true)
+  const bizAdmin = client()
+  await bizAdmin.auth.signInWithPassword({ email: `biz${stamp}@example.com`, password: 'password123' })
+  const { data: bizClubs } = await bizAdmin.from('clubs').select('id')
+  check('the new admin sees the moved club', bizClubs?.length === 1 && bizClubs[0].id === clubBRow.id)
+  const { data: coAdmins } = await admin.from('department_admins').select('email')
+  check('college admins see only their own college\'s admins', (coAdmins ?? []).every((a) => a.email !== `biz${stamp}@example.com`))
+  const evB2 = (await service.from('events').insert({ club_id: clubBRow.id, name: `B2 ${stamp}`, starts_at: inDays(31), ends_at: inDays(31, 13) }).select().single()).data
+  const { error: orgStepsBack } = await orgAdmin.rpc('decide_event', { p_event_id: evB2.id, p_decision: 'approve' })
+  check('once the college has an admin, the organization admin no longer decides', !!orgStepsBack)
+
+  // Removing a college admin
+  const bizUser = (await bizAdmin.auth.getUser()).data.user.id
+  const { error: lawRemoves } = await admin.rpc('remove_department_admin', { p_user_id: bizUser })
+  check('college admins cannot remove admins', !!lawRemoves)
+  const { error: remErr } = await orgAdmin.rpc('remove_department_admin', { p_user_id: bizUser })
+  const { data: bizAfter } = await anon.from('departments').select('is_participating').eq('id', biz.id).single()
+  const { data: bizProfile } = await service.from('profiles').select('is_active').eq('user_id', bizUser).single()
+  check('organization admin removes a college admin (account deactivated, college stops taking sign-ups)', !remErr && bizAfter?.is_participating === false && bizProfile?.is_active === false, remErr?.message)
+  const { error: orgBackIn } = await orgAdmin.rpc('decide_event', { p_event_id: evB2.id, p_decision: 'approve' })
+  check('...and the organization admin steps back in', !orgBackIn, orgBackIn?.message)
+
+  // Unit label
+  const { error: lawLabel } = await admin.rpc('update_organization', { p_unit_label: 'School' })
+  const { error: orgLabel } = await orgAdmin.rpc('update_organization', { p_unit_label: 'School' })
+  const { data: label } = await anon.from('universities').select('unit_label').eq('id', byu.id).single()
+  check('organization admin chooses what units are called', !!lawLabel && !orgLabel && label?.unit_label === 'School')
+  await orgAdmin.rpc('update_organization', { p_unit_label: 'College' })
+
+  // Partners see the college name
+  const { data: pv } = await partnerC.from('proposal_details').select('department_name').eq('club_id', clubARow.id).limit(1)
+  check('partners see the club\'s college', pv?.[0]?.department_name === 'BYU Law')
+
+  // Put club B back for later runs' assumptions
+  await orgAdmin.rpc('move_club', { p_club_id: clubBRow.id, p_department_id: byuLaw.id })
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')

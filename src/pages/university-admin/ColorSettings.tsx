@@ -11,16 +11,42 @@ const FIELDS: { key: keyof ThemeColors; label: string; hint: string }[] = [
   { key: 'fresh', label: 'Second accent', hint: 'Positive numbers and the second chart color.' },
 ]
 
-/** University colors: shown to this university's clubs and its administrator. */
-export default function ColorSettings() {
+/**
+ * Colors. scope "organization": the university's colors, used by all its
+ * colleges. scope "college": an optional override for one college; without
+ * one, the college uses the university's colors.
+ */
+export default function ColorSettings({ scope, universityName }: { scope: 'organization' | 'college'; universityName: string }) {
   const theme = useUniversityTheme()
-  const [draft, setDraft] = useState<ThemeColors>(theme.colors ?? DEFAULT_COLORS)
-  const [text, setText] = useState<ThemeColors>(theme.colors ?? DEFAULT_COLORS)
+  // For a college: its own colors (if any) and the university's.
+  const [info, setInfo] = useState<{ override: ThemeColors | null; organization: ThemeColors | null } | null>(
+    scope === 'organization' ? { override: theme.colors, organization: null } : null,
+  )
+  useEffect(() => {
+    if (scope !== 'college') return
+    void supabase.rpc('department_theme_info').then(({ data }) =>
+      setInfo((data as { override: ThemeColors | null; organization: ThemeColors | null } | null) ?? { override: null, organization: null }))
+  }, [scope])
+  if (!info) return null
+  return <ColorEditor scope={scope} universityName={universityName} info={info} onSaved={setInfo} theme={theme} />
+}
+
+function ColorEditor({ scope, universityName, info, onSaved, theme }: {
+  scope: 'organization' | 'college'
+  universityName: string
+  info: { override: ThemeColors | null; organization: ThemeColors | null }
+  onSaved: (info: { override: ThemeColors | null; organization: ThemeColors | null }) => void
+  theme: ReturnType<typeof useUniversityTheme>
+}) {
+  // What's in effect now: the college's own colors, else the university's, else CampusBridge's.
+  const inEffect = info.override ?? info.organization ?? DEFAULT_COLORS
+  const [draft, setDraft] = useState<ThemeColors>(inEffect)
+  const [text, setText] = useState<ThemeColors>(inEffect)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  const saved = theme.colors ?? DEFAULT_COLORS
+  const saved = inEffect
   const changed = (Object.keys(draft) as (keyof ThemeColors)[]).some((k) => draft[k].toLowerCase() !== saved[k].toLowerCase())
-  const isDefault = !theme.colors
+  const isDefault = !info.override
 
   // Live preview while editing; restore the saved colors when leaving the page.
   const { preview, endPreview } = theme
@@ -36,25 +62,33 @@ export default function ColorSettings() {
   async function save(colors: ThemeColors | null) {
     setBusy(true)
     setMsg(null)
-    const { error } = await supabase.rpc('set_university_theme', {
+    const { error } = await supabase.rpc(scope === 'college' ? 'set_department_theme' : 'set_university_theme', {
       p_primary: colors?.primary ?? null, p_pop: colors?.pop ?? null, p_fresh: colors?.fresh ?? null,
     })
     setBusy(false)
     if (error) return setMsg({ kind: 'error', text: error.message })
-    theme.commit(colors)
-    const next = colors ?? DEFAULT_COLORS
+    // What this admin now sees: their saved colors, or (a college going back) the university's.
+    theme.commit(colors ?? (scope === 'college' ? info.organization : null))
+    onSaved({ ...info, override: colors })
+    const next = colors ?? (scope === 'college' ? info.organization : null) ?? DEFAULT_COLORS
     setDraft(next)
     setText(next)
-    setMsg({ kind: 'success', text: colors ? 'Colors saved. Your clubs see them the next time they open CampusBridge.' : 'Back to the CampusBridge colors.' })
+    setMsg({ kind: 'success', text: colors
+      ? 'Colors saved. Your clubs see them the next time they open CampusBridge.'
+      : scope === 'college' ? `Back to ${universityName}’s colors.` : 'Back to the CampusBridge colors.' })
   }
 
   const vars = buildTheme(draft)
 
   return (
     <Card className="mt-4">
-      <h2 className="font-medium">Colors for your university</h2>
+      <h2 className="font-medium">{scope === 'college' ? 'Colors for your clubs' : 'Colors for your university'}</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Your clubs and you see CampusBridge in these colors. Partners and other universities don’t.
+        {scope === 'college'
+          ? (info.override
+            ? 'Your clubs see CampusBridge in these colors, instead of your university’s.'
+            : `Your clubs use ${universityName}’s colors. Pick your own here if you’d like.`)
+          : 'All your colleges’ clubs and admins see CampusBridge in these colors, unless a college picks its own. Partners and other universities don’t.'}
       </p>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
         {FIELDS.map((f) => (
@@ -110,8 +144,10 @@ export default function ColorSettings() {
           <Button variant="secondary" disabled={busy} onClick={() => { setDraft(saved); setText(saved); endPreview() }}>Cancel changes</Button>
         )}
         {!isDefault && (
-          <Button variant="ghost" disabled={busy} onClick={() => { if (confirm('Go back to the CampusBridge colors?')) void save(null) }}>
-            Use CampusBridge colors
+          <Button variant="ghost" disabled={busy} onClick={() => {
+            if (confirm(scope === 'college' ? `Go back to ${universityName}’s colors?` : 'Go back to the CampusBridge colors?')) void save(null)
+          }}>
+            {scope === 'college' ? `Use ${universityName}’s colors` : 'Use CampusBridge colors'}
           </Button>
         )}
       </div>

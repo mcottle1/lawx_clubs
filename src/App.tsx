@@ -41,6 +41,12 @@ const ClubsOverview = lazy(() => import('./pages/university-admin/ClubsOverview'
 const PublicOpportunity = lazy(() => import('./pages/PublicOpportunity'))
 const UniversityAdminHome = lazy(() => import('./pages/university-admin/UniversityAdminHome'))
 const SiteAdmin = lazy(() => import('./pages/site-admin/SiteAdmin'))
+const OrgLayout = lazy(() => import('./pages/org-admin/OrgLayout'))
+const OrgColleges = lazy(() => import('./pages/org-admin/OrgColleges'))
+const OrgApprovals = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgApprovals })))
+const OrgReceipts = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgReceipts })))
+const OrgClubs = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgClubs })))
+const OrgSettings = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgSettings })))
 
 export default function App() {
   return (
@@ -85,6 +91,13 @@ export default function App() {
             <Route path="receipts" element={<ReceiptsQueue />} />
             <Route path="clubs" element={<ClubsOverview />} />
             <Route path="settings" element={<UniversityAdminHome />} />
+          </Route>
+          <Route path="org-admin" element={<RequireRole roles={['org_admin']}><OrgLayout /></RequireRole>}>
+            <Route index element={<OrgColleges />} />
+            <Route path="approvals" element={<OrgApprovals />} />
+            <Route path="receipts" element={<OrgReceipts />} />
+            <Route path="clubs" element={<OrgClubs />} />
+            <Route path="settings" element={<OrgSettings />} />
           </Route>
           <Route path="o/:id" element={<PublicOpportunity />} />
           <Route path="site-admin" element={<RequireRole roles={['site_admin']}><SiteAdmin /></RequireRole>} />

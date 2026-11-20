@@ -33,7 +33,7 @@ function writeCache(userId: string, colors: ThemeColors | null) {
 export function UniversityThemeProvider({ children }: { children: ReactNode }) {
   const { session, profile } = useAuth()
   const userId = session?.user.id ?? null
-  const themed = profile?.role === 'club' || profile?.role === 'university_admin'
+  const themed = profile?.role === 'club' || profile?.role === 'university_admin' || profile?.role === 'org_admin'
   const [colors, setColors] = useState<ThemeColors | null>(null)
   const [version, setVersion] = useState(0)
   const shown = useRef('')

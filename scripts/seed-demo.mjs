@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Demo data so every dashboard and chart has something to show:
-// 2 universities (BYU, University of Utah) with an admin each, 3 clubs, 4 partners,
+// 2 universities (BYU, University of Utah), each with an organization admin and
+// a law school college with its own admin (plus an empty BYU business school
+// with no admin yet), 3 clubs, 4 partners,
 // past events with reports + receipts, upcoming events, opportunities, proposals
 // in every state, conversations, member-count history, a member list with
 // leadership roles (Moot Court Society) and to-dos.
@@ -10,8 +12,8 @@
 // Re-create (deletes the demo accounts and everything they own first):  add --reset
 //
 // All demo logins use the password below and @example.com addresses (the
-// app never sends real email to those). Universities that already have a real
-// administrator keep it — no demo admin is created for them.
+// app never sends real email to those). Real administrators and colleges are
+// left alone; the demo adds its own colleges (found or created by name).
 import { execSync } from 'node:child_process'
 import zlib from 'node:zlib'
 import { createClient } from '@supabase/supabase-js'
@@ -37,8 +39,8 @@ const must = (r, what) => { if (r.error) throw new Error(`${what}: ${r.error.mes
 
 // ---- people ------------------------------------------------------------------
 const ADMINS = [
-  { email: 'demo-admin-byu@example.com', uni: 'Brigham Young University', scheduling_url: 'https://example.com/byu-room-booking', scheduling_instructions: 'Book rooms in the law building at least 2 weeks ahead. Questions: rooms@example.com.' },
-  { email: 'demo-admin-utah@example.com', uni: 'University of Utah', scheduling_url: null, scheduling_instructions: 'Email the Student Affairs office with your event name, date, expected headcount and room preference.' },
+  { email: 'demo-admin-byu@example.com', org: 'demo-org-byu@example.com', college: 'J. Reuben Clark Law School', uni: 'Brigham Young University', scheduling_url: 'https://example.com/byu-room-booking', scheduling_instructions: 'Book rooms in the law building at least 2 weeks ahead. Questions: rooms@example.com.' },
+  { email: 'demo-admin-utah@example.com', org: 'demo-org-utah@example.com', college: 'S.J. Quinney College of Law', uni: 'University of Utah', scheduling_url: null, scheduling_instructions: 'Email the Student Affairs office with your event name, date, expected headcount and room preference.' },
 ]
 const PARTNERS = [
   { key: 'summit', email: 'demo-partner-summit@example.com', name: 'Summit Bar Review', city: 'Salt Lake City', state: 'UT', category: 'bar_prep', color: [240, 97, 46], website: 'https://example.com/summit-bar-review',
@@ -87,7 +89,7 @@ function at(days, hour = 12) {
   return d.toISOString()
 }
 const ymd = (iso) => iso.slice(0, 10)
-const allEmails = [...ADMINS, ...PARTNERS, ...CLUBS].map((x) => x.email)
+const allEmails = [...ADMINS.flatMap((a) => [a.email, a.org]), ...PARTNERS.map((p) => p.email), ...CLUBS.map((c) => c.email)]
 
 async function findUsers(emails) {
   const found = new Map()
@@ -123,22 +125,37 @@ if (existing.size) {
   for (const id of existing.values()) must(await db.auth.admin.deleteUser(id), 'delete user')
 }
 
-// ---- universities + admins ------------------------------------------------------
+// ---- universities, colleges + admins ---------------------------------------------
 const unis = {}
+const colleges = {}
+async function college(universityId, name) {
+  const found = must(await db.from('departments').select('id').eq('university_id', universityId).eq('name', name).maybeSingle(), 'college lookup')
+  return found ?? must(await db.from('departments').insert({ university_id: universityId, name }).select('id').single(), `college ${name}`)
+}
 for (const a of ADMINS) {
   const uni = must(await db.from('universities').select('id, name, city, state').eq('name', a.uni).single(), `university ${a.uni}`)
   unis[a.uni] = uni
-  const current = must(await db.from('university_admins').select('contact_email').eq('university_id', uni.id).maybeSingle(), 'admin lookup')
-  if (current) {
-    console.log(`• ${a.uni} already has an administrator (${current.contact_email}); keeping it.`)
-    a.skipped = current.contact_email
-  } else {
-    const id = await createUser(a.email, { role: 'invited_admin' })
-    must(await db.from('profiles').insert({ user_id: id, role: 'university_admin' }), 'admin profile')
-    must(await db.from('university_admins').insert({ user_id: id, university_id: uni.id, contact_email: a.email, scheduling_url: a.scheduling_url, scheduling_instructions: a.scheduling_instructions }), 'admin row')
-  }
+  // Organization admin
+  const orgId = await createUser(a.org, { role: 'invited_admin' })
+  must(await db.from('profiles').insert({ user_id: orgId, role: 'org_admin' }), 'org admin profile')
+  must(await db.from('org_admins').insert({ user_id: orgId, university_id: uni.id, email: a.org }), 'org admin row')
+  // Its law school college and the college's admin
+  const dept = await college(uni.id, a.college)
+  colleges[a.uni] = dept
+  const id = await createUser(a.email, { role: 'invited_admin' })
+  must(await db.from('profiles').insert({ user_id: id, role: 'university_admin' }), 'college admin profile')
+  must(await db.from('department_admins').insert({ user_id: id, department_id: dept.id, email: a.email }), 'college admin row')
+  // (re-seeding resets the demo college's settings to the defaults)
+  must(await db.from('department_settings').update({
+    scheduling_url: a.scheduling_url, scheduling_instructions: a.scheduling_instructions,
+    require_message_approval: true, require_opportunity_approval: true, require_proposal_approval: false,
+    theme_primary: null, theme_pop: null, theme_fresh: null,
+  }).eq('department_id', dept.id), 'college settings')
+  must(await db.from('departments').update({ is_participating: true }).eq('id', dept.id), 'college participating')
   must(await db.from('universities').update({ is_participating: true }).eq('id', uni.id), 'participating')
 }
+// A BYU college with no admin yet (the organization admin's "invite an admin" state).
+await college(unis['Brigham Young University'].id, 'Marriott School of Business')
 
 // ---- partners -------------------------------------------------------------------
 const partners = {}
@@ -156,7 +173,7 @@ const now = new Date()
 const yearStart = `${now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1}-08-01`
 const clubs = {}
 for (const c of CLUBS) {
-  const uid = await createUser(c.email, { role: 'club', club_name: c.name, university_id: unis[c.uni].id, initial_budget: String(c.budget), description: c.description })
+  const uid = await createUser(c.email, { role: 'club', club_name: c.name, university_id: unis[c.uni].id, department_id: colleges[c.uni].id, initial_budget: String(c.budget), description: c.description })
   const logo = await uploadLogo(uid, c.color)
   const row = must(await db.from('clubs').update({ logo_path: logo, budget_year_start: yearStart, social_links: { instagram: c.name.toLowerCase().replace(/\W+/g, '') } })
     .eq('user_id', uid).select('id, user_id, name').single(), 'club')
@@ -357,7 +374,7 @@ await conversation('pils', 'wasatch', 'Pro bono partnership', null, null, [
 // ---- done ------------------------------------------------------------------------------
 console.log('\nDemo data created. Logins (password for all: ' + DEMO_PASSWORD + '):')
 const rows = [
-  ...ADMINS.map((a) => [a.skipped ? `${a.uni} admin (existing)` : `${a.uni} admin`, a.skipped ?? a.email]),
+  ...ADMINS.flatMap((a) => [[`${a.uni} organization admin`, a.org], [`${a.college} admin`, a.email]]),
   ...CLUBS.map((c) => [`Club: ${c.name}`, c.email]),
   ...PARTNERS.map((p) => [`Partner: ${p.name}`, p.email]),
 ]

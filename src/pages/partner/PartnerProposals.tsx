@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { clubWhere } from '../../lib/constants'
 import { Link, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
 import ProposalForm from '../../components/ProposalForm'
@@ -53,7 +54,7 @@ export default function PartnerProposals() {
               <Card>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-semibold">{p.club_name} <span className="text-xs font-normal text-slate-500">· {p.university_name}</span></p>
+                    <p className="font-semibold">{p.club_name} <span className="text-xs font-normal text-slate-500">· {clubWhere(p.department_name, p.university_name)}</span></p>
                     <p className="text-xs text-slate-500">
                       {p.opportunity_title ?? p.event_name ?? 'General sponsorship'}
                       {p.event_starts_at && p.event_time_zone && ` · ${formatEventRange(p.event_starts_at, p.event_starts_at, p.event_time_zone).split(' · ')[0]}`}
