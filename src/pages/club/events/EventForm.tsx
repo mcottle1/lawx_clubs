@@ -200,7 +200,7 @@ export default function EventForm() {
             {(fid) => <textarea id={fid} rows={4} maxLength={5000} className={inputClass} value={form.description} onChange={text('description')} />}
           </Field>
           <Field label="Event budget (USD)" hint="What you expect to spend. Actual spending is reported after the event.">
-            {(fid) => <input id={fid} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass + ' sm:w-48'} value={form.budget} onChange={text('budget')} />}
+            {(fid) => <input id={fid} type="number" min={0} step={5} inputMode="decimal" className={inputClass + ' sm:w-48'} value={form.budget} onChange={text('budget')} />}
           </Field>
         </Card>
 

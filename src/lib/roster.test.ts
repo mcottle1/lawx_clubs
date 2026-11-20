@@ -61,3 +61,21 @@ describe('diffRoster', () => {
     expect(d.unchanged).toBe(1)
   })
 })
+
+describe('roster download', () => {
+  it('re-imports to the same members, and neutralizes spreadsheet formulas', async () => {
+    const { toCsv } = await import('./csv')
+    const csv = toCsv([
+      ['Name', 'Email', 'Role', 'Joined'],
+      ['Park, Bo', 'bo@byu.edu', 'Treasurer', '2026-09-01'],
+      ['Ann "AJ" Lee', 'ann@byu.edu', '', '2026-09-02'],
+      ['=HYPERLINK("x")', 'cy@byu.edu', '', '2026-09-03'],
+    ])
+    const r = parseRoster(csv)
+    expect(r.members.map((m) => [m.name, m.email, m.role])).toEqual([
+      ['Park, Bo', 'bo@byu.edu', 'Treasurer'],
+      ['Ann "AJ" Lee', 'ann@byu.edu', null],
+      ["'=HYPERLINK(\"x\")", 'cy@byu.edu', null],
+    ])
+  })
+})

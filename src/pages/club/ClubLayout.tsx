@@ -27,11 +27,13 @@ export default function ClubLayout() {
     if (!data) return setInfo(null)
     const { universities, ...club } = data as Club & { universities: { name: string; city: string | null; state: string | null } | null }
     const { data: admin } = await supabase
-      .from('university_admins').select('scheduling_url, scheduling_instructions')
+      .from('university_admins').select('scheduling_url, scheduling_instructions, require_message_approval, require_opportunity_approval')
       .eq('university_id', club.university_id).maybeSingle()
     setInfo({
       club, universityName: universities?.name ?? '', universityCity: universities?.city ?? null,
-      universityState: universities?.state ?? null, scheduling: admin ?? null, userId,
+      universityState: universities?.state ?? null, userId,
+      scheduling: admin ? { scheduling_url: admin.scheduling_url, scheduling_instructions: admin.scheduling_instructions } : null,
+      approvals: { message: admin?.require_message_approval ?? false, opportunity: admin?.require_opportunity_approval ?? false },
     })
   }, [userId])
 

@@ -240,13 +240,22 @@ npx supabase functions deploy
   secrets: club emails use the same `RESEND_API_KEY` and `EMAIL_FROM`. See **Emailing club
   members** below for the Resend limits.
 
+- **Approval settings & send back** added two migrations (new review statuses; university
+  approval settings, the review/resubmit functions and the admin's message-review view) and
+  changed the `notify` and `email-members` functions. Run `npx supabase db push` and
+  `npx supabase functions deploy` as above. No new secrets. **Heads-up:** the new settings default
+  to *on* for clubs' first messages and opportunity posts, so after you deploy, those wait for the
+  university admin until the admin turns them off (**Settings → What needs your approval**).
+  Messages and posts that already exist stay live.
+
 ## Emailing club members
 
 Clubs can email their member list (or just their leadership) from **Members → Email members**,
 with attachments from Club files or their device. How it's sent:
 
-- From your `EMAIL_FROM` address, shown as "*Club name* via CampusBridge". Replies go to the
-  club's own email (the one they log in with), which also receives a copy.
+- From your `EMAIL_FROM` address, shown as "*Club name* via CampusBridge". **The club's own email
+  (the one they log in with) always gets a copy**, as the "To" address, and replies go there.
+  For clubs with more than 49 recipients, the club gets one copy per batch of 49 (see below).
 - Members are **BCC'd** in batches of 49, so nobody sees anyone else's address.
 - **A verified Resend domain is required** (you already have `lawxclub.com`). Without it Resend
   only delivers to your own address.
@@ -280,9 +289,53 @@ npx supabase secrets set MEMBER_EMAIL_DAILY_LIMIT=10
    add a file from your computer → **Send to 7 leaders**. Your own address gets the email with
    both attachments, BCC'd. The demo addresses are skipped. The email shows under **Sent emails**.
    (With a real club account, **Send me a test** sends a copy to the club's address first.)
-6. Log in as a partner (demo: `demo-partner-wasatch@example.com`) → **History** tab: every
+6. **Download roster** saves the current list as a CSV (Name, Email, Role, Joined) that you can
+   edit and import again.
+7. Log in as a partner (demo: `demo-partner-wasatch@example.com`) → **History** tab: every
    sponsorship the university approved, with totals, results per event, a year filter and
    **Download CSV**.
+
+## University approvals
+
+Each university administrator chooses what needs their approval in **Settings → What needs your
+approval**:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| A club's first message to a partner | On | The partner only receives the message after the admin approves it. Replies after that flow normally. |
+| Sponsorship opportunities clubs post | On | Partners only see a post (and its share link) after approval, and again after the club edits what partners see. Closing/reopening doesn't need approval. |
+| Partner proposals, before the club sees them | Off | The admin screens each proposal first. If approved, the club sees it and accepts or declines as usual; accepted partnerships still come back for final approval. |
+
+Events and final partnership agreements always need approval, as before. Changing a setting
+affects new submissions; anything already waiting stays in the queue.
+
+**Approve, send back, or deny.** Every item in the admin's **Approvals** queue (events,
+partnerships, proposals to screen, opportunity posts, first messages) has three choices:
+
+- **Approve.**
+- **Send back** with a note saying what to change. The item is marked **Changes requested** (not
+  denied). The club (or, for proposals, the partner) sees the note, edits the item, and resubmits
+  it, or resubmits it as is. It then comes back to the queue, labelled with the earlier note.
+- **Deny** with a reason (final, as before; for events, editing still resubmits).
+
+Everyone involved gets an email at each step. Receipts keep their own approve/deny/reimburse flow.
+
+## How to test approvals
+
+1. Log in as the BYU admin (demo: `admin@byu.example`, or your real BYU admin) → **Settings**.
+   Check the three switches; turn on **Partner proposals** and save.
+2. **Approvals**: the demo data has a first message (Moot Court Society → Cougar Town Catering) and
+   an opportunity post (Women in Law's Mentorship Brunch) waiting. **Send back** the brunch with a
+   note, and **Approve** the message.
+3. As `demo-club-wil@example.com` → **Partnerships → Your opportunities**: the brunch shows your
+   note. **Edit and resubmit** it. Then **All partners → Reach out** to a partner: the button says
+   **Submit for approval**, and the conversation shows that it's waiting.
+4. As the admin, approve the brunch. As `demo-partner-summit@example.com`, open it from the
+   dashboard and send a proposal: it says the university reviews it first.
+5. As the admin, **Send back** the proposal. As Summit → **Proposals**: **Edit and resubmit**. As
+   the admin, approve it. Women in Law now sees it under **Proposals**.
+6. **Send back** a pending event, then as that club open the event: **Resubmit without changes**
+   or **Edit and resubmit**.
 
 ## Custom domain
 

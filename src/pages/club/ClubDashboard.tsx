@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Receipt, Todo } from '../../lib/types'
+import type { BudgetSummary, ClubEvent, ClubFile, EventReport, MemberCount, ProposalDetail, Receipt, Todo, ApprovalStatus } from '../../lib/types'
 import ReceiptsCard from './dashboard/ReceiptsCard'
 import { ButtonLink, PageHeader } from '../../components/ui'
 import { useClub } from './ClubContext'
@@ -10,7 +10,7 @@ import FilesSummary from './dashboard/FilesSummary'
 import MembersCard from './dashboard/MembersCard'
 import AttendanceChart from './dashboard/AttendanceChart'
 import MembershipChart from './dashboard/MembershipChart'
-import PendingApprovals from './dashboard/PendingApprovals'
+import PendingApprovals, { type ReviewItem } from './dashboard/PendingApprovals'
 import TodoList from './dashboard/TodoList'
 
 export default function ClubDashboard() {
@@ -23,6 +23,7 @@ export default function ClubDashboard() {
   const [files, setFiles] = useState<ClubFile[]>([])
   const [proposals, setProposals] = useState<ProposalDetail[]>([])
   const [unread, setUnread] = useState(0)
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [receipts, setReceipts] = useState<(Receipt & { events: { name: string } | null })[]>([])
 
   const loadCounts = useCallback(async () => {
@@ -49,6 +50,16 @@ export default function ClubDashboard() {
       .then(({ data }) => setProposals((data as ProposalDetail[]) ?? []))
     supabase.from('conversation_list').select('id', { count: 'exact', head: true }).eq('unread', true)
       .then(({ count }) => setUnread(count ?? 0))
+    // Opportunity posts and first messages that are waiting on (or were sent back by) the university.
+    void Promise.all([
+      supabase.from('opportunities').select('id, title, approval_status, review_note').eq('club_id', club.id).in('approval_status', ['pending', 'changes_requested']),
+      supabase.from('conversation_list').select('id, subject, partner_name, approval_status, review_note').eq('club_id', club.id).in('approval_status', ['pending', 'changes_requested']),
+    ]).then(([o, c]) => setReviewItems([
+      ...((o.data ?? []) as { id: string; title: string; approval_status: ApprovalStatus; review_note: string | null }[])
+        .map((x) => ({ key: `o${x.id}`, label: x.title, kind: 'Opportunity post', to: '/club/partnerships?tab=opportunities', status: x.approval_status, note: x.review_note })),
+      ...((c.data ?? []) as { id: string; subject: string; partner_name: string; approval_status: ApprovalStatus; review_note: string | null }[])
+        .map((x) => ({ key: `c${x.id}`, label: `Message to ${x.partner_name}`, kind: x.subject, to: `/club/messages/${x.id}`, status: x.approval_status, note: x.review_note })),
+    ]))
     supabase.from('receipts').select('*, events(name)').eq('club_id', club.id).order('created_at', { ascending: false }).limit(20)
       .then(({ data }) => setReceipts((data as (Receipt & { events: { name: string } | null })[]) ?? []))
     void loadCounts()
@@ -69,7 +80,7 @@ export default function ClubDashboard() {
           <MembersCard clubId={club.id} counts={counts} onSaved={() => void loadCounts()} />
         </div>
         <div className="space-y-4 lg:row-span-2">
-          <PendingApprovals events={events} proposals={proposals} unread={unread} />
+          <PendingApprovals events={events} proposals={proposals} reviewItems={reviewItems} unread={unread} />
           <TodoList clubId={club.id} todos={todos} onChange={loadTodos} />
           <ReceiptsCard receipts={receipts} />
           <FilesSummary files={files} />

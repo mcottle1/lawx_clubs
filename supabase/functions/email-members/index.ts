@@ -7,10 +7,11 @@
 //   uploads?: { path: string, name: string }[],  // files uploaded to the email-attachments bucket
 //   test?: boolean                               // send only to the club's own email
 // }
-// → { status, recipient_count, delivered_count, skipped_count, error? }
+// → { status, recipient_count, delivered_count, skipped_count, club_copy, error? }
 //
-// Members are BCC'd (they never see each other's addresses) in batches of 49;
-// the club's own address is in "To" and is the Reply-To. Uses the RESEND_API_KEY
+// Members are BCC'd (they never see each other's addresses) in batches of 49.
+// The club's own address is always in "To" (so the club always gets a copy,
+// one per batch) and is the Reply-To. Uses the RESEND_API_KEY
 // and EMAIL_FROM secrets like every other email. MEMBER_EMAIL_DAILY_LIMIT
 // (default 5) caps how many member emails a club can send per 24 hours.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
@@ -163,9 +164,12 @@ Deno.serve(async (req) => {
     if (!clubReserved) batches.push([])
   } else {
     for (let i = 0; i < recipients.length; i += BCC_BATCH) batches.push(recipients.slice(i, i + BCC_BATCH))
+    // The club always gets a copy, even if no member address can be emailed.
+    if (batches.length === 0 && !clubReserved) batches.push([])
   }
 
   let delivered = 0
+  let clubCopy = false
   const errors: string[] = []
   let status: 'sent' | 'partial' | 'failed' | 'skipped'
 
@@ -192,14 +196,18 @@ Deno.serve(async (req) => {
           body: JSON.stringify(payload),
         })
         const out = await res.json().catch(() => ({}))
-        if (res.ok) delivered += test ? 1 : bcc.length
-        else errors.push(`${res.status}: ${out.message ?? JSON.stringify(out)}`)
+        if (res.ok) {
+          delivered += test ? 1 : bcc.length
+          if (!clubReserved) clubCopy = true
+        } else errors.push(`${res.status}: ${out.message ?? JSON.stringify(out)}`)
       } catch (e) {
         errors.push(String(e))
       }
     }
     const deliverable = test ? 1 : recipients.length
-    status = delivered === 0 ? 'failed' : delivered < deliverable ? 'partial' : 'sent'
+    status = deliverable === 0
+      ? (clubCopy ? 'sent' : 'failed')
+      : delivered === 0 ? 'failed' : delivered < deliverable ? 'partial' : 'sent'
   }
   if (skippedReserved.length && status !== 'skipped') {
     errors.push(`${skippedReserved.length} demo/test address(es) skipped.`)
@@ -215,6 +223,7 @@ Deno.serve(async (req) => {
       recipient_count: total,
       delivered_count: delivered,
       attachment_names: attachmentNames,
+      club_copy: clubCopy,
       status,
       error: errors.length ? errors.join(' ').slice(0, 2000) : null,
     })
@@ -226,6 +235,7 @@ Deno.serve(async (req) => {
     recipient_count: total,
     delivered_count: delivered,
     skipped_count: skippedReserved.length,
+    club_copy: clubCopy,
     error: errors.length ? errors.join(' ') : undefined,
   })
 })

@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import LogoInput from '../../../components/LogoInput'
+import SentBackNotice from '../../../components/SentBackNotice'
 import { Alert, Button, Card, Field, inputClass, PageHeader, Spinner } from '../../../components/ui'
 import { SUPPORT_TYPES } from '../../../lib/constants'
 import { publicUrl } from '../../../lib/files'
+import { notify } from '../../../lib/notify'
 import { validateImage } from '../../../lib/storage'
 import { supabase } from '../../../lib/supabase'
 import type { ClubEvent, Opportunity, SupportType } from '../../../lib/types'
@@ -15,7 +17,7 @@ export default function OpportunityForm() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { club, userId } = useClub()
+  const { club, userId, approvals } = useClub()
   const [existing, setExisting] = useState<Opportunity | null | undefined>(id ? undefined : null)
   const [events, setEvents] = useState<ClubEvent[]>([])
   const [f, setF] = useState({ title: '', description: '', support_type: 'food' as SupportType, amount_sought: '', event_id: params.get('event') ?? '' })
@@ -63,11 +65,13 @@ export default function OpportunityForm() {
         title: f.title.trim(), description: f.description.trim(), support_type: f.support_type,
         amount_sought: amount, event_id: f.event_id || null, photo_path,
       }
-      const { error } = existing
-        ? await supabase.from('opportunities').update(row).eq('id', existing.id)
-        : await supabase.from('opportunities').insert({ ...row, club_id: club.id })
+      const { data: saved, error } = existing
+        ? await supabase.from('opportunities').update(row).eq('id', existing.id).select('id, approval_status').single()
+        : await supabase.from('opportunities').insert({ ...row, club_id: club.id }).select('id, approval_status').single()
       if (error) throw error
-      navigate('/club/partnerships?tab=opportunities', { replace: true })
+      const pending = saved.approval_status === 'pending'
+      if (pending && existing?.approval_status !== 'pending') notify('opportunity_submitted', saved.id)
+      navigate('/club/partnerships?tab=opportunities', { replace: true, state: { opportunitySaved: pending ? 'pending' : 'live' } })
     } catch (err) {
       setError((err as Error).message)
       setBusy(false)
@@ -76,9 +80,18 @@ export default function OpportunityForm() {
 
   return (
     <>
-      <PageHeader title={existing ? 'Edit opportunity' : 'Post a sponsorship opportunity'} subtitle="Describe what a sponsor gets. Open opportunities show up on partners' dashboards." />
+      <PageHeader
+        title={existing ? 'Edit opportunity' : 'Post a sponsorship opportunity'}
+        subtitle={approvals.opportunity
+          ? 'Describe what a sponsor gets. Your university approves posts before they show up on partners’ dashboards.'
+          : 'Describe what a sponsor gets. Open opportunities show up on partners’ dashboards.'}
+      />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <Alert>{error}</Alert>}
+        {existing?.approval_status === 'changes_requested' && <SentBackNotice note={existing.review_note} />}
+        {existing?.approval_status === 'approved' && approvals.opportunity && (
+          <Alert kind="info">Saving changes to the title, description, amount, event or photo sends it to your university for approval again. Partners won’t see it until then.</Alert>
+        )}
         <DraftHelper
           supportType={f.support_type}
           event={events.find((e) => e.id === f.event_id) ?? null}
@@ -103,7 +116,7 @@ export default function OpportunityForm() {
               )}
             </Field>
             <Field label="Amount to ask for (USD)" hint="Optional.">
-              {(fid) => <input id={fid} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass} value={f.amount_sought} onChange={set('amount_sought')} />}
+              {(fid) => <input id={fid} type="number" min={0} step={5} inputMode="decimal" className={inputClass} value={f.amount_sought} onChange={set('amount_sought')} />}
             </Field>
             <Field label="For an event">
               {(fid) => (
@@ -121,7 +134,9 @@ export default function OpportunityForm() {
         </Card>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Link to="/club/partnerships?tab=opportunities" className="px-4 py-2 text-center text-sm text-slate-600 hover:underline">Cancel</Link>
-          <Button type="submit" disabled={busy}>{busy ? 'Saving…' : existing ? 'Save changes' : 'Post opportunity'}</Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Saving…' : existing?.approval_status === 'changes_requested' ? 'Save and resubmit' : existing ? 'Save changes' : approvals.opportunity ? 'Submit for approval' : 'Post opportunity'}
+          </Button>
         </div>
       </form>
     </>

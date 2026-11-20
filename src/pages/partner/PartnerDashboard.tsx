@@ -34,7 +34,7 @@ export default function PartnerDashboard() {
     supabase.from('partner_event_results').select('*').order('starts_at', { ascending: false })
       .then(({ data }) => setResults((data as PartnerEventResult[]) ?? []))
     const since = new Date(Date.now() - 14 * 864e5).toISOString()
-    supabase.from('opportunity_cards').select('*').eq('status', 'open').gte('created_at', since).limit(200)
+    supabase.from('opportunity_cards').select('*').eq('status', 'open').eq('approval_status', 'approved').gte('created_at', since).limit(200)
       .then(({ data }) => setRecentByUni((data as OpportunityCard[]) ?? []))
   }, [])
 
@@ -47,6 +47,8 @@ export default function PartnerDashboard() {
     for (const r of results.filter((r) => Date.now() - new Date(r.submitted_at).getTime() < 14 * 864e5).slice(0, 3)) {
       out.push({ text: `${r.event_name} report is in — ${r.attendees} attended`, to: '#results' })
     }
+    const sentBack = proposals.filter((p) => p.status === 'changes_requested').length
+    if (sentBack) out.push({ text: `${sentBack} proposal${sentBack === 1 ? '' : 's'} sent back for changes — edit and resubmit`, to: '/partner/proposals' })
     const unread = convs.filter((c) => c.unread).length
     if (unread) out.push({ text: `${unread} conversation${unread === 1 ? '' : 's'} with new messages`, to: '/partner/messages' })
     const waitingClub = proposals.filter((p) => p.status === 'pending_club').length
@@ -126,7 +128,7 @@ export default function PartnerDashboard() {
           {results.length === 0 && (
             <Card>
               <h2 className="font-medium">Results</h2>
-              <p className="mt-2 text-sm text-slate-500">Attendance and offers redeemed from events you sponsor appear here once clubs submit their post-event reports.</p>
+              <p className="mt-2 text-sm text-slate-500">Attendance and offers extended from events you sponsor appear here once clubs submit their post-event reports.</p>
             </Card>
           )}
         </div>
@@ -145,14 +147,14 @@ function OpportunityFeed() {
   const set = (k: keyof typeof filters) => (e: { target: { value: string } }) => { setFilters({ ...filters, [k]: e.target.value }); setPage(0) }
 
   useEffect(() => {
-    supabase.from('opportunity_cards').select('university_id, university_name').eq('status', 'open').limit(1000).then(({ data }) => {
+    supabase.from('opportunity_cards').select('university_id, university_name').eq('status', 'open').eq('approval_status', 'approved').limit(1000).then(({ data }) => {
       const map = new Map((data ?? []).map((r) => [r.university_id as string, r.university_name as string]))
       setUniversities([...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)))
     })
   }, [])
 
   useEffect(() => {
-    let q = supabase.from('opportunity_cards').select('*', { count: 'exact' }).eq('status', 'open')
+    let q = supabase.from('opportunity_cards').select('*', { count: 'exact' }).eq('status', 'open').eq('approval_status', 'approved')
     if (filters.university) q = q.eq('university_id', filters.university)
     if (filters.type) q = q.eq('support_type', filters.type)
     if (filters.from) q = q.gte('event_starts_at', new Date(`${filters.from}T00:00`).toISOString())
@@ -240,8 +242,8 @@ function Results({ results }: { results: PartnerEventResult[] }) {
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <StatTile label="Events reported" value={results.length} />
           <StatTile label="Students reached" value={reached} />
-          <StatTile label="Offers redeemed" value={redeemed} tone="fresh" />
-          <StatTile label="Redemption rate" value={reachedWithOffers ? `${Math.round((redeemed / reachedWithOffers) * 100)}%` : '—'} tone="pop" />
+          <StatTile label="Offers extended" value={redeemed} tone="fresh" />
+          <StatTile label="Offer rate" value={reachedWithOffers ? `${Math.round((redeemed / reachedWithOffers) * 100)}%` : '—'} tone="pop" />
         </div>
         <div className="mt-4 grid gap-6 md:grid-cols-2">
           <div>
@@ -254,11 +256,11 @@ function Results({ results }: { results: PartnerEventResult[] }) {
             />
           </div>
           <div>
-            <h3 className="text-sm font-medium text-slate-700">Offers redeemed per event</h3>
+            <h3 className="text-sm font-medium text-slate-700">Offers extended per event</h3>
             <BarMetric
               color={brand.fresh()}
-              valueLabel="offers redeemed"
-              summary={`Offers redeemed at ${rows.length} sponsored events, ${redeemed} in total.`}
+              valueLabel="offers extended"
+              summary={`Offers extended at ${rows.length} sponsored events, ${redeemed} in total.`}
               data={rows.map((r) => ({ label: label(r.starts_at), value: r.offers_redeemed ?? 0, details: [r.event_name, r.club_name, ...(r.offers_redeemed === null ? ['(not reported)'] : [])] }))}
             />
           </div>
@@ -267,7 +269,7 @@ function Results({ results }: { results: PartnerEventResult[] }) {
           {[...results].slice(0, 5).map((r) => (
             <li key={r.event_id} className="py-2">
               <p><span className="font-medium">{r.event_name}</span> <span className="text-xs text-slate-500">· {r.club_name} · {new Date(r.starts_at).toLocaleDateString()}</span></p>
-              <p className="text-slate-700">{r.attendees} attended{r.offers_redeemed !== null && ` · ${r.offers_redeemed} offers redeemed`}</p>
+              <p className="text-slate-700">{r.attendees} attended{r.offers_redeemed !== null && ` · ${r.offers_redeemed} offers extended`}</p>
               {r.notes && <p className="mt-0.5 text-xs text-slate-600">“{r.notes}”</p>}
             </li>
           ))}

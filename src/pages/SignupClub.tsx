@@ -111,7 +111,7 @@ export default function SignupClub() {
           </Field>
         </div>
         <Field label="Initial annual budget (USD)" required>
-          {(id) => <input id={id} type="number" inputMode="decimal" min={0} step="0.01" className={inputClass} value={form.initial_budget} onChange={set('initial_budget')} />}
+          {(id) => <input id={id} type="number" inputMode="decimal" min={0} step={5} className={inputClass} value={form.initial_budget} onChange={set('initial_budget')} />}
         </Field>
         <Field label="Short club description" hint="A few sentences about your club. Max 2,000 characters.">
           {(id) => <textarea id={id} rows={4} maxLength={2000} className={inputClass} value={form.description} onChange={set('description')} />}

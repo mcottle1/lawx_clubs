@@ -10,9 +10,11 @@ import { Card } from '../../../components/ui'
 const COLORS = {
   get approved() { return brand.primary() },
   pending: '#b45309',
+  changes_requested: '#9d174d',
   denied: '#b91c1c',
   past: '#64748b',
 }
+const LEGEND = { approved: 'Approved', pending: 'Pending', changes_requested: 'Changes requested', denied: 'Denied', past: 'Past' }
 
 export default function ClubCalendar({ events, reports }: { events: ClubEvent[]; reports: Map<string, EventReport> }) {
   const navigate = useNavigate()
@@ -24,10 +26,10 @@ export default function ClubCalendar({ events, reports }: { events: ClubEvent[];
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-medium">Calendar</h2>
         <ul className="flex flex-wrap gap-3 text-xs text-slate-600" aria-label="Legend">
-          {(['approved', 'pending', 'denied', 'past'] as const).map((k) => (
+          {(['approved', 'pending', 'changes_requested', 'denied', 'past'] as const).map((k) => (
             <li key={k} className="flex items-center gap-1">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLORS[k] }} aria-hidden />
-              {k === 'past' ? 'Past' : k[0].toUpperCase() + k.slice(1)}
+              {LEGEND[k]}
             </li>
           ))}
         </ul>

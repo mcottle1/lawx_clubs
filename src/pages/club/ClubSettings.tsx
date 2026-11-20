@@ -74,7 +74,7 @@ export default function ClubSettings() {
           <h2 className="font-medium">Budget</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Annual budget (USD)" required>
-              {(id) => <input id={id} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass} value={form.initial_budget} onChange={set('initial_budget')} />}
+              {(id) => <input id={id} type="number" min={0} step={5} inputMode="decimal" className={inputClass} value={form.initial_budget} onChange={set('initial_budget')} />}
             </Field>
             <Field label="Budget year starts" required hint="Spending reported for events on or after this date counts against the budget. Update it each new year.">
               {(id) => <input id={id} type="date" max={todayIso()} className={inputClass} value={form.budget_year_start} onChange={set('budget_year_start')} />}

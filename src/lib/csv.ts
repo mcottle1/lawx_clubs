@@ -40,3 +40,28 @@ export function countRoster(text: string, hasHeader?: boolean): RosterCount {
   const skip = (hasHeader ?? looksLikeHeader) && rows.length > 0 ? 1 : 0
   return { count: rows.length - skip, looksLikeHeader, firstRow }
 }
+
+/** One CSV cell: quoted when needed; spreadsheet formulas are neutralized. */
+export function csvCell(v: string | number | null | undefined): string {
+  let s = v === null || v === undefined ? '' : String(v)
+  // A leading = + - @ would run as a formula when opened in Excel/Sheets.
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+export function toCsv(rows: (string | number | null | undefined)[][]): string {
+  return rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
+}
+
+/** Saves rows as a .csv file in the browser. */
+export function downloadCsv(fileName: string, rows: (string | number | null | undefined)[][]): void {
+  const blob = new Blob(['﻿' + toCsv(rows)], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

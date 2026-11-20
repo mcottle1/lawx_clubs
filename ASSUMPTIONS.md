@@ -355,3 +355,57 @@ Running log of judgment calls made where the spec was ambiguous.
   Totals and a CSV download follow the year filter. Spending and budgets stay hidden from
   partners, as before.
 
+## Approval settings, send back, and smaller changes (2026-11-20)
+
+- **Who reviews:** the request said "site admin", but approvals in CampusBridge are done by each
+  **university administrator** (the site admin doesn't approve anything). The new settings and
+  the "send back" option are on the university admin's pages.
+- **Settings** live on the university admin's record and apply to every club at that
+  university: first messages (default on), opportunity posts (default on), proposal screening
+  (default off). Existing messages and posts were left as they were (approved). Turning a setting
+  off doesn't release items already waiting; the admin still decides those.
+- **"First message"** means a conversation a club starts (Reach out, or the thank-you message
+  after a report). The partner can't see the conversation at all until it's approved, and nobody
+  can add messages to it until then. The club can edit the subject and message while it's
+  waiting or after it's sent back. Conversations a partner starts never need approval.
+- **Opportunity posts** need approval again when the club edits what partners see (title,
+  description, support type, amount, event or photo), mirroring how edited events go back to
+  pending. Closing or reopening doesn't. While waiting, the post is hidden from partners and its
+  public share link doesn't work, and the club doesn't get the share/caption buttons.
+- **Proposal screening:** a screened proposal (and its summary message) is invisible to the club
+  until approved; a proposal denied at screening is never shown to the club. Approved proposals
+  still need the club's acceptance and then the university's final approval, as before. Two
+  approvals of the same partnership is intentional: the first checks the partner's offer, the
+  second the agreement the club accepted.
+- **Send back ("Changes requested")** replaces denying when the admin wants changes. It needs a
+  note. It goes to whoever made the request:
+  - events, opportunity posts, first messages → the club (edit and resubmit, or resubmit as is);
+  - proposals being screened → the partner (edit the terms and resubmit);
+  - partnerships waiting for final approval → the partner. Their terms change, so the partner is
+    taken off the event, the opportunity reopens, and after resubmitting it goes back through
+    screening (if on) and to the club to accept again.
+  - an event with a partnership attached → the club; the partnership waits and is decided with
+    the event when it's resubmitted.
+  The note is stored in the same place as a denial reason (events, proposals) or a new
+  `review_note` (posts, messages). On resubmission the admin sees "Resubmitted after your note".
+- **Deny** works as before (final, with a reason). Receipts keep their own approve / deny /
+  reimbursed flow and are not part of this change.
+- **Emails:** the admin is emailed for each new or resubmitted item; the requester for each
+  decision; and when a first message is approved the partner gets the usual "new message" email.
+  Email de-duplication now includes the review time, so an item reviewed twice (sent back, then
+  approved) emails both times.
+- **Club copy of member emails:** the club's address was already the "To" of member emails; it
+  now also gets a copy when none of the member addresses can be emailed, and the composer and
+  history say so. Because Resend allows 50 recipients per email, a club with more than 49
+  recipients gets one copy per batch (a separate "To" address per batch would mean sending to a
+  no-reply mailbox, which bounces).
+- **Roster download:** a CSV with Name, Email, Role, Joined, in the same format the importer
+  reads. Cells that start with = + - @ get a leading apostrophe so spreadsheets don't run them as
+  formulas.
+- **"Offers extended":** partner-facing wording only (partner dashboard, History page and CSV,
+  the results email to sponsors, and the landing page's partner card). "Redemption rate" became
+  "Offer rate". Clubs' report forms still say "offers redeemed".
+- **$5 steps:** every dollar input (budgets, event budget, amount asked, funding offered, amount
+  spent, receipt amounts) steps by $5 with the arrows; typing any amount, including cents, still
+  works.
+

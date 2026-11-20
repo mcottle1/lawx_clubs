@@ -19,6 +19,7 @@ interface SendResult {
   recipient_count: number
   delivered_count: number
   skipped_count: number
+  club_copy?: boolean
   error?: string
 }
 
@@ -112,7 +113,8 @@ export default function EmailComposer({
         const note = res.status === 'partial' || res.skipped_count
           ? ` (${res.delivered_count} of ${res.recipient_count} delivered${res.error ? ` — ${res.error}` : ''})`
           : ''
-        onSent(`Email sent to ${res.delivered_count} ${res.delivered_count === 1 ? 'person' : 'people'}${note}.`)
+        const copy = res.club_copy ? `, plus a copy to ${clubEmail}` : ''
+        onSent(`Email sent to ${res.delivered_count} ${res.delivered_count === 1 ? 'member' : 'members'}${copy}${note}.`)
       } else {
         setError(res.error ?? 'The email could not be sent.')
       }
@@ -144,7 +146,8 @@ export default function EmailComposer({
           </label>
         </div>
         <p className="mt-1 text-xs text-slate-500">
-          Members are BCC’d, so they don’t see each other’s addresses. Replies go to {clubEmail}.
+          A copy always goes to your club’s email, {clubEmail}, and replies go there too. Members are BCC’d,
+          so they don’t see each other’s addresses.
         </p>
       </fieldset>
 

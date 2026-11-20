@@ -195,7 +195,7 @@ function ReportForm({
             {(id) => <input id={id} type="number" min={0} step={1} inputMode="numeric" className={inputClass} value={f.attendees} onChange={set('attendees')} />}
           </Field>
           <Field label="Amount spent (USD)" required hint="Deducted from your club budget.">
-            {(id) => <input id={id} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass} value={f.amount_spent} onChange={set('amount_spent')} />}
+            {(id) => <input id={id} type="number" min={0} step={5} inputMode="decimal" className={inputClass} value={f.amount_spent} onChange={set('amount_spent')} />}
           </Field>
           <Field label="Offers redeemed" hint={event.partners ? 'e.g. sign-ups for the sponsor’s discount. Optional.' : 'Optional.'}>
             {(id) => <input id={id} type="number" min={0} step={1} inputMode="numeric" className={inputClass} value={f.offers_redeemed} onChange={set('offers_redeemed')} />}
@@ -215,7 +215,7 @@ function ReportForm({
                   {(id) => <input id={id} type="file" accept={RECEIPT_ACCEPT} className={inputClass} onChange={(e) => setRow(r.key, { file: e.target.files?.[0] ?? null })} />}
                 </Field>
                 <Field label="Amount">
-                  {(id) => <input id={id} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass} value={r.amount} onChange={(e) => setRow(r.key, { amount: e.target.value })} />}
+                  {(id) => <input id={id} type="number" min={0} step={5} inputMode="decimal" className={inputClass} value={r.amount} onChange={(e) => setRow(r.key, { amount: e.target.value })} />}
                 </Field>
                 <Field label="What for">
                   {(id) => <input id={id} className={inputClass} maxLength={500} placeholder="e.g. Pizza" value={r.description} onChange={(e) => setRow(r.key, { description: e.target.value })} />}
@@ -296,7 +296,7 @@ function ReceiptsSection({
           {(id) => <input key={key} id={id} type="file" accept={RECEIPT_ACCEPT} className={inputClass} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />}
         </Field>
         <Field label="Amount">
-          {(id) => <input id={id} type="number" min={0} step="0.01" inputMode="decimal" className={inputClass} value={amount} onChange={(e) => setAmount(e.target.value)} />}
+          {(id) => <input id={id} type="number" min={0} step={5} inputMode="decimal" className={inputClass} value={amount} onChange={(e) => setAmount(e.target.value)} />}
         </Field>
         <Field label="What for">
           {(id) => <input id={id} className={inputClass} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />}

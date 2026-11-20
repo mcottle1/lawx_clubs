@@ -336,6 +336,24 @@ await conversation('pils', 'wasatch', 'Pro bono partnership', null, null, [
   ['partner', 'Possibly — can you share the date and expected number of clients?'],
 ])
 
+// ---- items in the university approval queue ------------------------------------------
+// (BYU's settings default to approving first messages and opportunity posts.)
+{
+  const msg = await conversation('moot', 'cougar', 'Catering for Moot Court Finals Night', ev.mootFinals, null, [
+    ['club', 'Hi Cougar Town! We expect about 80 people at our Finals Night. Would you consider catering at a student discount, or sponsoring dessert?'],
+  ])
+  must(await db.from('conversations').update({ approval_status: 'pending', partner_last_read_at: null }).eq('id', msg.id), 'pending message')
+  must(await db.from('opportunities').insert({
+    club_id: clubs.wil.id, title: 'Sponsor our Mentorship Brunch', support_type: 'food', amount_sought: 400, approval_status: 'pending',
+    description: 'Brunch for 50 students and 15 attorney mentors. Sponsors get a welcome slot and their logo on the program.',
+  }), 'pending opportunity')
+  must(await db.from('opportunities').insert({
+    club_id: clubs.moot.id, title: 'Sponsor practice-round judges’ lunch', support_type: 'food', approval_status: 'changes_requested',
+    review_note: 'Please add the expected headcount and date so partners know what they’re sponsoring.',
+    description: 'Lunch for our volunteer judges.', reviewed_at: new Date().toISOString(),
+  }), 'sent-back opportunity')
+}
+
 // ---- done ------------------------------------------------------------------------------
 console.log('\nDemo data created. Logins (password for all: ' + DEMO_PASSWORD + '):')
 const rows = [

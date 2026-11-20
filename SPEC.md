@@ -239,3 +239,11 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   **Email members** composer (subject, message, attachments from club files or their device) that
   sends from the site. Partners get a **History** page listing every approved sponsorship over
   time with contributions and results. Affected: Club flow (new Members section), Partner flow.
+- **2026-11-20 — University approval settings and "send back".** Each university admin can turn on
+  or off approval of clubs' first messages to partners (default on), clubs' opportunity posts
+  (default on), and partner proposals before clubs see them (default off). Every approval can now
+  also be **sent back** to the requester with a note ("changes requested"); the requester edits
+  and resubmits. Also: clubs can download their roster as CSV; the club always gets a copy of
+  member emails; partners see "offers extended" instead of "offers redeemed"; dollar inputs step
+  by $5. Affected: University admin flow (approvals, settings), Club flow (messaging, opportunities,
+  members), Partner flow (proposals, results wording).

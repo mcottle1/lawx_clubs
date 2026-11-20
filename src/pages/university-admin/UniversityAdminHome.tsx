@@ -6,7 +6,7 @@ import { Alert, Button, Card, Field, inputClass, Spinner } from '../../component
 
 type AdminRow = UniversityAdmin & { universities: { name: string } | null }
 
-/** Phase 1: university info + scheduling settings. Approvals/receipts come later. */
+/** University settings: what needs approval, plus room-scheduling info for clubs. */
 export default function UniversityAdminHome() {
   const { session } = useAuth()
   const [row, setRow] = useState<AdminRow | null | undefined>(undefined)
@@ -77,6 +77,76 @@ export default function UniversityAdminHome() {
           </form>
         </Card>
       </div>
+      <ApprovalSettings row={row} onSaved={(r) => setRow({ ...row, ...r })} />
     </>
+  )
+}
+
+type Toggle = 'require_message_approval' | 'require_opportunity_approval' | 'require_proposal_approval'
+const TOGGLES: { key: Toggle; label: string; hint: string }[] = [
+  {
+    key: 'require_message_approval',
+    label: 'A club’s first message to a partner',
+    hint: 'The partner only receives it after you approve. Replies after that don’t need approval.',
+  },
+  {
+    key: 'require_opportunity_approval',
+    label: 'Sponsorship opportunities clubs post',
+    hint: 'Partners only see a post after you approve it, and again after the club edits it.',
+  },
+  {
+    key: 'require_proposal_approval',
+    label: 'Partner proposals, before the club sees them',
+    hint: 'You screen each proposal first. Accepted partnerships still come to you for final approval.',
+  },
+]
+
+function ApprovalSettings({ row, onSaved }: { row: AdminRow; onSaved: (r: Pick<AdminRow, Toggle>) => void }) {
+  const [values, setValues] = useState<Record<Toggle, boolean>>({
+    require_message_approval: row.require_message_approval,
+    require_opportunity_approval: row.require_opportunity_approval,
+    require_proposal_approval: row.require_proposal_approval,
+  })
+  const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const changed = TOGGLES.some((t) => values[t.key] !== row[t.key])
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setMsg(null)
+    const { error } = await supabase.from('university_admins').update(values).eq('id', row.id)
+    setBusy(false)
+    if (error) return setMsg({ kind: 'error', text: error.message })
+    onSaved(values)
+    setMsg({ kind: 'success', text: 'Approval settings saved. They apply to new submissions; anything already waiting stays in your queue.' })
+  }
+
+  return (
+    <Card className="mt-4">
+      <h2 className="font-medium">What needs your approval</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Events and final partnership agreements always need your approval. Choose what else does.
+      </p>
+      <form onSubmit={save} className="mt-4 space-y-3" noValidate>
+        {msg && <Alert kind={msg.kind}>{msg.text}</Alert>}
+        {TOGGLES.map((t) => (
+          <label key={t.key} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+            <input
+              type="checkbox"
+              role="switch"
+              className="mt-0.5 h-4 w-4 accent-accent-600"
+              checked={values[t.key]}
+              onChange={(e) => setValues({ ...values, [t.key]: e.target.checked })}
+            />
+            <span>
+              <span className="font-medium">{t.label}</span>
+              <span className="block text-xs text-slate-500">{t.hint}</span>
+            </span>
+          </label>
+        ))}
+        <Button type="submit" disabled={busy || !changed}>{busy ? 'Saving…' : 'Save approval settings'}</Button>
+      </form>
+    </Card>
   )
 }

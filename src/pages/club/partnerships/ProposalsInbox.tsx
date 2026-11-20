@@ -55,6 +55,11 @@ export default function ProposalsInbox() {
           </div>
           <div className="mt-3"><ProposalTerms p={p} /></div>
           {p.status === 'denied' && p.denial_reason && <Alert className="mt-3">University's reason: {p.denial_reason}</Alert>}
+          {p.status === 'changes_requested' && (
+            <Alert kind="info" className="mt-3">
+              Your university sent this back to {p.partner_name} to revise{p.denial_reason ? `: “${p.denial_reason}”` : '.'} You’ll be asked to accept the new terms.
+            </Alert>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             {p.status === 'pending_club' && (
               <>

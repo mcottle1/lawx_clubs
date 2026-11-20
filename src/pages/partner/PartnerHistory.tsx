@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import StatTile from '../../components/charts/StatTile'
 import { Button, Card, inputClass, PageHeader, Spinner } from '../../components/ui'
+import { downloadCsv } from '../../lib/csv'
 import { usd } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { PartnerEvent, PartnerEventResult, ProposalDetail } from '../../lib/types'
@@ -20,11 +21,6 @@ interface HistoryRow {
   studentOffer: string | null
   attendees: number | null
   redeemed: number | null
-}
-
-function csvCell(v: string | number | null): string {
-  const s = v === null ? '' : String(v)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 /** Everything a partner has sponsored, approved by the university, with results over time. */
@@ -87,17 +83,11 @@ export default function PartnerHistory() {
   }
 
   function download() {
-    const header = ['Date', 'Club', 'University', 'Event or opportunity', 'Funding (USD)', 'Lunches / people covered', 'In-kind', 'Student offer', 'Attendees', 'Offers redeemed']
+    const header = ['Date', 'Club', 'University', 'Event or opportunity', 'Funding (USD)', 'Lunches / people covered', 'In-kind', 'Student offer', 'Attendees', 'Offers extended']
     const lines = shown.map((x) => [
       x.date.slice(0, 10), x.club, x.university, x.title, x.amount || null, x.headcount || null, x.inKind, x.studentOffer, x.attendees, x.redeemed,
-    ].map(csvCell).join(','))
-    const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `campusbridge-sponsorships${year === 'all' ? '' : `-${year}`}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    ])
+    downloadCsv(`campusbridge-sponsorships${year === 'all' ? '' : `-${year}`}.csv`, [header, ...lines])
   }
 
   let lastYear = ''
@@ -132,7 +122,7 @@ export default function PartnerHistory() {
             <StatTile label="Funding" value={totals.amount ? usd.format(totals.amount).replace(/\.00$/, '') : '—'} tone="pop" />
             <StatTile label="Lunches / people covered" value={totals.headcount || '—'} />
             <StatTile label="Students reached" value={totals.reached} tone="fresh" />
-            <StatTile label="Offers redeemed" value={totals.redeemed} tone="fresh" />
+            <StatTile label="Offers extended" value={totals.redeemed} tone="fresh" />
           </div>
           <Card className="p-0">
             <ul className="divide-y divide-slate-100">
@@ -161,7 +151,7 @@ export default function PartnerHistory() {
                         {x.attendees !== null ? (
                           <>
                             <span className="font-semibold">{x.attendees}</span> attended
-                            {x.redeemed !== null && <span className="block text-xs text-slate-500">{x.redeemed} offers redeemed</span>}
+                            {x.redeemed !== null && <span className="block text-xs text-slate-500">{x.redeemed} offers extended</span>}
                           </>
                         ) : (
                           <span className="text-xs text-slate-500">{x.upcoming ? 'Upcoming' : 'Report not in yet'}</span>

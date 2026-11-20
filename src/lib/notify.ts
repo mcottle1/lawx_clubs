@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 
 type NotifyType =
   | 'event_submitted' | 'message' | 'proposal_submitted' | 'proposal_responded' | 'reviewed'
-  | 'report_submitted' | 'receipt_reviewed'
+  | 'report_submitted' | 'receipt_reviewed' | 'opportunity_submitted'
 
 /**
  * Asks the `notify` Edge Function to send the email that goes with an action

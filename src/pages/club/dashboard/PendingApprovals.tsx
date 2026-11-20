@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatEventRange } from '../../../lib/format'
-import type { ClubEvent, ProposalDetail } from '../../../lib/types'
+import type { ApprovalStatus, ClubEvent, ProposalDetail } from '../../../lib/types'
 import StatusBadge from '../../../components/StatusBadge'
 import { Card } from '../../../components/ui'
 
@@ -9,11 +9,22 @@ import { Card } from '../../../components/ui'
  * club can fix them), proposals waiting on the club, partnerships waiting on
  * the university, and unread messages.
  */
+export interface ReviewItem {
+  key: string
+  label: string
+  kind: string
+  to: string
+  status: ApprovalStatus
+  note: string | null
+}
+
 export default function PendingApprovals({
-  events, proposals, unread,
+  events, proposals, reviewItems, unread,
 }: {
   events: ClubEvent[]
   proposals: ProposalDetail[]
+  /** Opportunity posts and first messages waiting on (or sent back by) the university. */
+  reviewItems: ReviewItem[]
   unread: number
 }) {
   const now = Date.now()
@@ -24,8 +35,8 @@ export default function PendingApprovals({
 
   return (
     <Card>
-      <h2 className="font-medium">Waiting on approval <span className="text-sm font-normal text-slate-500">({items.length + atUniversity.length})</span></h2>
-      {items.length + atUniversity.length === 0 ? (
+      <h2 className="font-medium">Waiting on approval <span className="text-sm font-normal text-slate-500">({items.length + atUniversity.length + reviewItems.length})</span></h2>
+      {items.length + atUniversity.length + reviewItems.length === 0 ? (
         <p className="mt-2 text-sm text-slate-500">Nothing pending.</p>
       ) : (
         <ul className="mt-2 divide-y divide-slate-100">
@@ -38,6 +49,17 @@ export default function PendingApprovals({
                 <span>{formatEventRange(e.starts_at, e.ends_at, e.time_zone)}</span>
               </div>
               {e.approval_status === 'denied' && e.denial_reason && <p className="mt-1 text-xs text-red-800">Reason: {e.denial_reason}</p>}
+              {e.approval_status === 'changes_requested' && e.denial_reason && <p className="mt-1 text-xs text-pop-700">University’s note: {e.denial_reason}</p>}
+            </li>
+          ))}
+          {reviewItems.map((r) => (
+            <li key={r.key} className="py-2 text-sm">
+              <Link to={r.to} className="font-medium hover:underline">{r.label}</Link>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <StatusBadge status={r.status} />
+                <span className="truncate">{r.kind}</span>
+              </div>
+              {r.status === 'changes_requested' && r.note && <p className="mt-1 text-xs text-pop-700">University’s note: {r.note}</p>}
             </li>
           ))}
           {atUniversity.map((p) => (

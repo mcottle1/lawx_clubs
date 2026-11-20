@@ -7,7 +7,9 @@ import { supabase } from '../../../lib/supabase'
 import type { ClubEvent, EventReport, Opportunity, Partner, ProposalDetail } from '../../../lib/types'
 import ProposalStatusBadge from '../../../components/ProposalStatusBadge'
 import { supportLabel } from '../../../lib/constants'
+import SentBackNotice from '../../../components/SentBackNotice'
 import StatusBadge from '../../../components/StatusBadge'
+import { notify } from '../../../lib/notify'
 import { Alert, Button, ButtonLink, Card, PageHeader, Spinner } from '../../../components/ui'
 import { useClub } from '../ClubContext'
 import SchedulingHelp from './SchedulingHelp'
@@ -44,6 +46,14 @@ export default function EventDetail() {
   const ended = new Date(event.ends_at) < new Date()
   const flyer = publicUrl('flyers', event.flyer_path)
 
+  async function resubmit() {
+    const { error } = await supabase.rpc('resubmit_event', { p_event_id: event!.id })
+    if (error) return setError(error.message)
+    notify('event_submitted', event!.id)
+    setEvent({ ...event!, approval_status: 'pending' })
+    navigate('.', { replace: true, state: { saved: 'resubmitted' } })
+  }
+
   async function onDelete() {
     if (!confirm(`Delete “${event!.name}”? This can't be undone.`)) return
     const { error } = await supabase.from('events').delete().eq('id', event!.id)
@@ -66,6 +76,16 @@ export default function EventDetail() {
       <div className="space-y-4">
         {saved && <Alert kind="success">Event {saved}. {event.approval_status === 'pending' && 'It’s waiting for your university administrator’s approval.'}</Alert>}
         {error && <Alert>{error}</Alert>}
+        {event.approval_status === 'changes_requested' && (
+          <SentBackNotice note={event.denial_reason}>
+            {upcoming ? (
+              <>
+                <ButtonLink to={`/club/events/${event.id}/edit`} className="px-3 py-1 text-sm">Edit and resubmit</ButtonLink>
+                <Button variant="secondary" className="px-3 py-1 text-sm" onClick={() => void resubmit()}>Resubmit without changes</Button>
+              </>
+            ) : <span className="text-xs text-slate-600">This event’s date has passed.</span>}
+          </SentBackNotice>
+        )}
         {event.approval_status === 'denied' && (
           <Alert>
             Denied{event.denial_reason ? `: ${event.denial_reason}` : '.'} {upcoming && 'Edit the event to resubmit it.'}

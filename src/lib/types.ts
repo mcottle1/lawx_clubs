@@ -56,9 +56,19 @@ export interface UniversityAdmin {
   contact_email: string
   scheduling_url: string | null
   scheduling_instructions: string | null
+  require_message_approval: boolean
+  require_opportunity_approval: boolean
+  require_proposal_approval: boolean
 }
 
-export type ApprovalStatus = 'pending' | 'approved' | 'denied'
+/** Fields shared by things a university admin reviews (opportunities, first messages). */
+export interface Reviewable {
+  approval_status: ApprovalStatus
+  review_note: string | null
+}
+
+/** 'changes_requested' = sent back to the requester with a note. */
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'changes_requested'
 export type ClubFileType = 'flyer' | 'logo' | 'constitution' | 'other'
 
 export interface ClubEvent {
@@ -137,7 +147,8 @@ export interface BudgetSummary {
 
 export type SupportType = 'food' | 'funding' | 'in_kind' | 'speaker' | 'other'
 export type OpportunityStatus = 'open' | 'filled' | 'closed'
-export type ProposalStatus = 'pending_club' | 'declined' | 'pending_admin' | 'approved' | 'denied' | 'withdrawn'
+export type ProposalStatus =
+  | 'pending_review' | 'pending_club' | 'declined' | 'pending_admin' | 'approved' | 'denied' | 'withdrawn' | 'changes_requested'
 
 export interface Opportunity {
   id: string
@@ -150,6 +161,8 @@ export interface Opportunity {
   photo_path: string | null
   status: OpportunityStatus
   created_at: string
+  approval_status: ApprovalStatus
+  review_note: string | null
 }
 
 /** Row of the opportunity_cards view (no budgets). */
@@ -216,6 +229,28 @@ export interface ConversationListItem {
   partner_logo_path: string | null
   unread: boolean
   last_message: string | null
+  approval_status: ApprovalStatus
+  review_note: string | null
+}
+
+/** A club's first message to a partner, as the university admin reviews it. */
+export interface MessageReview {
+  id: string
+  subject: string
+  club_id: string
+  partner_id: string
+  event_id: string | null
+  approval_status: ApprovalStatus
+  review_note: string | null
+  submitted_at: string
+  reviewed_at: string | null
+  club_name: string
+  partner_name: string
+  partner_category: PartnerCategory
+  partner_city: string
+  partner_state: string
+  event_name: string | null
+  body: string | null
 }
 
 export interface Message {
@@ -301,6 +336,8 @@ export interface MemberEmail {
   recipient_count: number
   delivered_count: number
   attachment_names: string[]
+  /** Whether the club's own address got its copy. */
+  club_copy: boolean
   status: MemberEmailStatus
   error: string | null
   created_at: string

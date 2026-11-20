@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { formatDay } from '../../../lib/format'
+import { downloadCsv } from '../../../lib/csv'
+import { formatDay, todayIso } from '../../../lib/format'
 import { supabase } from '../../../lib/supabase'
 import type { ClubMember, MemberCount, MemberEmail } from '../../../lib/types'
 import Modal from '../../../components/Modal'
@@ -68,6 +69,13 @@ export default function Members() {
     void load()
   }
 
+  /** The current list as a CSV that can be re-imported (Name, Email, Role, Joined). */
+  function downloadRoster() {
+    const rows = (members ?? []).map((m) => [m.name, m.email, m.role ?? '', m.joined_on])
+    const slug = club.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'club'
+    downloadCsv(`${slug}-roster-${todayIso()}.csv`, [['Name', 'Email', 'Role', 'Joined'], ...rows])
+  }
+
   async function followMemberList() {
     const { error } = await supabase.rpc('use_member_list_for_count')
     if (error) return setMsg({ kind: 'error', text: error.message })
@@ -90,6 +98,7 @@ export default function Members() {
         actions={
           <>
             <Button variant="secondary" onClick={() => setDialog({ kind: 'import' })}>Import roster</Button>
+            {members.length > 0 && <Button variant="secondary" onClick={downloadRoster}>Download roster</Button>}
             <Button variant="secondary" onClick={() => setDialog({ kind: 'add' })}>Add member</Button>
             <Button variant="pop" onClick={() => setDialog({ kind: 'email' })} disabled={members.length === 0}>Email members</Button>
           </>
@@ -240,7 +249,7 @@ function EmailHistory({ emails }: { emails: MemberEmail[] }) {
                     </div>
                     <p className="text-xs text-slate-500">
                       {new Date(e.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} ·{' '}
-                      {e.audience === 'leadership' ? 'Leadership' : 'All members'} · {e.delivered_count} of {e.recipient_count} delivered
+                      {e.audience === 'leadership' ? 'Leadership' : 'All members'} · {e.delivered_count} of {e.recipient_count} delivered{e.club_copy && ' + club copy'}
                     </p>
                   </summary>
                   <div className="mt-2 rounded-md bg-slate-50 p-2 text-xs text-slate-700">

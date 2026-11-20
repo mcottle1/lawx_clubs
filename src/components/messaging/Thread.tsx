@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { notify } from '../../lib/notify'
 import { supabase } from '../../lib/supabase'
 import type { ConversationListItem, Message } from '../../lib/types'
+import SentBackNotice from '../SentBackNotice'
 import { Alert, Button, Card, inputClass, PageHeader, Spinner } from '../ui'
 
 /**
@@ -87,14 +88,75 @@ export default function Thread({
           })}
         </ol>
         <div ref={bottom} />
+        {conv.approval_status !== 'approved' ? (
+          <ReviewStatus conv={conv} firstMessage={messages[0]?.body ?? ''} onResubmitted={() => void load()} />
+        ) : (
         <form onSubmit={send} className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-end">
           <label htmlFor="reply" className="sr-only">Your message</label>
           <textarea id="reply" rows={2} maxLength={5000} className={inputClass} placeholder="Write a message…" value={body} onChange={(e) => setBody(e.target.value)} />
           <Button type="submit" disabled={busy || !body.trim()}>{busy ? 'Sending…' : 'Send'}</Button>
         </form>
+        )}
         {error && <Alert className="mt-2">{error}</Alert>}
       </Card>
       <Link to={`/${side}/messages`} className="mt-4 inline-block text-sm text-accent-700 hover:underline">← All messages</Link>
     </>
   )
 }
+
+/** Club side of a first message that needs (or failed) university approval. */
+function ReviewStatus({ conv, firstMessage, onResubmitted }: { conv: ConversationListItem; firstMessage: string; onResubmitted: () => void }) {
+  const [editing, setEditing] = useState(conv.approval_status === 'changes_requested')
+  const [subject, setSubject] = useState(conv.subject)
+  const [text, setText] = useState(firstMessage)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function resubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!text.trim()) return setError('Write a message.')
+    setBusy(true)
+    setError(null)
+    const { error } = await supabase.rpc('resubmit_conversation', { p_conversation_id: conv.id, p_subject: subject.trim(), p_body: text.trim() })
+    setBusy(false)
+    if (error) return setError(error.message)
+    notify('message', conv.id)
+    setEditing(false)
+    onResubmitted()
+  }
+
+  const form = (
+    <form onSubmit={resubmit} className="mt-3 space-y-3" noValidate>
+      {error && <Alert>{error}</Alert>}
+      <div>
+        <label htmlFor="resub-subject" className="mb-1 block text-sm font-medium">Subject</label>
+        <input id="resub-subject" className={inputClass} maxLength={200} value={subject} onChange={(e) => setSubject(e.target.value)} />
+      </div>
+      <div>
+        <label htmlFor="resub-body" className="mb-1 block text-sm font-medium">Message</label>
+        <textarea id="resub-body" rows={6} maxLength={5000} className={inputClass} value={text} onChange={(e) => setText(e.target.value)} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Resubmit for approval'}</Button>
+        {conv.approval_status === 'pending' && <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>}
+      </div>
+    </form>
+  )
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-4">
+      {conv.approval_status === 'pending' && (
+        <Alert kind="info">
+          Waiting for your university to approve this message. {conv.partner_name} gets it once it’s approved, and you’ll get an email.{' '}
+          {!editing && <button type="button" className="font-semibold underline" onClick={() => setEditing(true)}>Edit message</button>}
+        </Alert>
+      )}
+      {conv.approval_status === 'changes_requested' && <SentBackNotice note={conv.review_note} />}
+      {conv.approval_status === 'denied' && (
+        <Alert>Your university didn’t approve this message{conv.review_note ? `: ${conv.review_note}` : '.'} It wasn’t sent to {conv.partner_name}.</Alert>
+      )}
+      {editing && conv.approval_status !== 'denied' && form}
+    </div>
+  )
+}
+

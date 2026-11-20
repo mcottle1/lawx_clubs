@@ -47,7 +47,7 @@ export default function Landing() {
         </Feature>
         <Feature color="pop" title="For partners" icon={<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z" />}>
           Discover student organizations to sponsor, send proposals in a few clicks, and see attendance and offers
-          redeemed for every event.
+          extended for every event.
         </Feature>
         <Feature color="fresh" title="For universities" icon={<path d="M4 10l8-5 8 5-8 5zM7 12v4c0 1.5 2.2 3 5 3s5-1.5 5-3v-4" />}>
           Approve events and partnerships, process receipts and reimbursements, and keep an overview of every club.

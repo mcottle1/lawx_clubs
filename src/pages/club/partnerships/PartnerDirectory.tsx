@@ -95,7 +95,7 @@ export default function PartnerDirectory() {
 
 export function ReachOutForm({ partner, eventId }: { partner: Partner; eventId?: string }) {
   const navigate = useNavigate()
-  const { club } = useClub()
+  const { club, approvals } = useClub()
   const [events, setEvents] = useState<ClubEvent[]>([])
   const [selectedEvent, setEventId] = useState(eventId ?? '')
   const [subject, setSubject] = useState('Sponsorship opportunity')
@@ -139,8 +139,12 @@ export function ReachOutForm({ partner, eventId }: { partner: Partner; eventId?:
       <Field label="Message" required>
         {(id) => <textarea id={id} rows={6} maxLength={5000} className={inputClass} value={body} onChange={(e) => setBody(e.target.value)} />}
       </Field>
-      <p className="text-xs text-slate-500">They'll get it on the site and by email.</p>
-      <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Sending…' : 'Send message'}</Button>
+      <p className="text-xs text-slate-500">
+        {approvals.message
+          ? 'Your university reviews a club’s first message to a partner. Once it’s approved, they get it on the site and by email.'
+          : 'They’ll get it on the site and by email.'}
+      </p>
+      <Button type="submit" className="w-full" disabled={busy}>{busy ? 'Sending…' : approvals.message ? 'Submit for approval' : 'Send message'}</Button>
     </form>
   )
 }

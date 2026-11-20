@@ -2,15 +2,19 @@
 // POST { type, id, kind? }  (called by the browser right after the action succeeds)
 //
 //   event_submitted    id = event        → university admin: new pending approval
-//   message            id = conversation → the other side: new message (max 1/day/thread)
-//   proposal_submitted id = proposal     → club: new proposal
+//   message            id = conversation → the other side: new message (max 1/day/thread),
+//                                           or the admin if it's a first message awaiting approval
+//   opportunity_submitted id = opportunity → university admin: post awaiting approval
+//   proposal_submitted id = proposal     → club: new proposal (or the admin, if screening is on)
 //   proposal_responded id = proposal     → partner: accepted/declined (+ admin: pending approval)
-//   reviewed           id, kind = 'event' | 'proposal' → club (+ partner): approved/denied
+//   reviewed           id, kind = 'event' | 'proposal' | 'opportunity' | 'message'
+//                                         → requester (+ other side): approved / sent back / denied
 //   report_submitted   id = event        → sponsor: results are in (+ admin: receipts to review)
 //   receipt_reviewed   id = receipt      → club: receipt status changed
 //
 // Every send is checked against what the caller actually did (so this can't
 // be used to email arbitrary people) and de-duplicated through email_log.
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { adminClient, userClient } from '../_shared/clients.ts'
 import { corsHeaders, errorResponse, json } from '../_shared/cors.ts'
 import { sendEmail } from '../_shared/email.ts'
@@ -42,45 +46,68 @@ Deno.serve(async (req) => {
 
     case 'message': {
       const { data: conv } = await db.from('conversations')
-        .select('id, subject, club_id, partner_id, clubs(name, email, user_id), partners(name, email, user_id)')
+        .select('id, subject, club_id, partner_id, approval_status, submitted_at, clubs(name, email, user_id), partners(name, email, user_id)')
         .eq('id', id).maybeSingle()
       if (!conv) return errorResponse('Not found', 404)
       // deno-lint-ignore no-explicit-any
       const c = conv as any
       const side = c.clubs?.user_id === user.id ? 'club' : c.partners?.user_id === user.id ? 'partner' : null
       if (!side) return errorResponse('Not allowed', 403)
-      const { data: msg } = await db.from('messages').select('body, created_at').eq('conversation_id', id)
-        .eq('sender_user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (!msg) return json({ status: 'skipped' })
-      const to = side === 'club' ? c.partners.email : c.clubs.email
-      const from = side === 'club' ? c.clubs.name : c.partners.name
-      const route = side === 'club' ? `/partner/messages/${id}` : `/club/messages/${id}`
-      const preview = msg.body.length > 400 ? msg.body.slice(0, 400) + '…' : msg.body
+      // A first message waiting for approval goes to the university admin, not the partner.
+      if (c.approval_status !== 'approved') {
+        if (side !== 'club' || c.approval_status !== 'pending') return json({ status: 'skipped' })
+        const to = await adminEmailFor(db, c.club_id)
+        if (!to) return json({ status: 'no_admin' })
+        const status = await sendEmail(db, {
+          to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_message:${id}:${c.submitted_at}`,
+          subject: `Approval needed: ${c.clubs.name}'s message to ${c.partners.name}`,
+          text: `${c.clubs.name} wants to message ${c.partners.name} ("${c.subject}"). It needs your approval before it's sent.\n\nReview it here:\n${link('/university-admin')}\n`,
+        })
+        return json({ status })
+      }
+      return json({ status: await emailNewMessage(db, c, side, user.id) })
+    }
+
+    case 'opportunity_submitted': {
+      const { data: o } = await db.from('opportunities')
+        .select('id, title, club_id, approval_status, submitted_at, clubs(name, user_id)').eq('id', id).maybeSingle()
+      // deno-lint-ignore no-explicit-any
+      const op = o as any
+      if (!op || op.clubs?.user_id !== user.id) return errorResponse('Not allowed', 403)
+      if (op.approval_status !== 'pending') return json({ status: 'skipped' })
+      const to = await adminEmailFor(db, op.club_id)
+      if (!to) return json({ status: 'no_admin' })
       const status = await sendEmail(db, {
-        to, template: 'new_message', relatedId: id,
-        dedupeKey: `message:${id}:${side === 'club' ? 'partner' : 'club'}:${today()}`,
-        subject: `New message from ${from}: ${c.subject}`,
-        text: `${from} wrote:\n\n${preview}\n\nReply on CampusBridge:\n${link(route)}\n`,
+        to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_opportunity:${id}:${op.submitted_at}`,
+        subject: `Approval needed: ${op.clubs.name}'s opportunity "${op.title}"`,
+        text: `${op.clubs.name} posted a sponsorship opportunity, "${op.title}". Partners see it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
       })
       return json({ status })
     }
 
     case 'proposal_submitted': {
-      const { data: p } = await db.from('proposals').select('id, club_id, partners(name, user_id), clubs(email), opportunities(title), events(name)').eq('id', id).maybeSingle()
+      const { data: p } = await db.from('proposals')
+        .select('id, club_id, status, submitted_at, partners(name, user_id), clubs(name, email), opportunities(title), events(name)').eq('id', id).maybeSingle()
       // deno-lint-ignore no-explicit-any
       const pr = p as any
       if (!pr || pr.partners?.user_id !== user.id) return errorResponse('Not allowed', 403)
       const about = pr.opportunities?.title ?? pr.events?.name ?? 'your club'
-      const status = await sendEmail(db, {
-        to: pr.clubs.email, template: 'new_proposal', relatedId: id, dedupeKey: `proposal_submitted:${id}`,
-        subject: `New sponsorship proposal from ${pr.partners.name}`,
-        text: `${pr.partners.name} sent a proposal for "${about}".\n\nReview and accept or decline it here:\n${link('/club/partnerships?tab=proposals')}\n`,
-      })
-      return json({ status })
+      if (pr.status === 'pending_review') {
+        const to = await adminEmailFor(db, pr.club_id)
+        if (!to) return json({ status: 'no_admin' })
+        const status = await sendEmail(db, {
+          to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal_review:${id}:${pr.submitted_at}`,
+          subject: `Approval needed: proposal from ${pr.partners.name} to ${pr.clubs.name}`,
+          text: `${pr.partners.name} sent ${pr.clubs.name} a sponsorship proposal for "${about}". The club sees it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
+        })
+        return json({ status })
+      }
+      if (pr.status !== 'pending_club') return json({ status: 'skipped' })
+      return json({ status: await emailNewProposal(db, pr, about) })
     }
 
     case 'proposal_responded': {
-      const { data: p } = await db.from('proposals').select('id, status, club_id, event_id, partners(email), clubs(name, user_id), opportunities(title), events(name, approval_status)').eq('id', id).maybeSingle()
+      const { data: p } = await db.from('proposals').select('id, status, club_id, event_id, club_responded_at, partners(email), clubs(name, user_id), opportunities(title), events(name, approval_status)').eq('id', id).maybeSingle()
       // deno-lint-ignore no-explicit-any
       const pr = p as any
       if (!pr || pr.clubs?.user_id !== user.id) return errorResponse('Not allowed', 403)
@@ -89,7 +116,7 @@ Deno.serve(async (req) => {
       const about = pr.opportunities?.title ?? pr.events?.name ?? 'their club'
       const status = await sendEmail(db, {
         to: pr.partners.email, template: accepted ? 'proposal_accepted' : 'proposal_declined', relatedId: id,
-        dedupeKey: `proposal_responded:${id}:${pr.status}`,
+        dedupeKey: `proposal_responded:${id}:${pr.status}:${pr.club_responded_at}`,
         subject: `${pr.clubs.name} ${accepted ? 'accepted' : 'declined'} your proposal`,
         text: accepted
           ? `${pr.clubs.name} accepted your proposal for "${about}". It now goes to their university for final approval.\n\nSee your proposals:\n${link('/partner/proposals')}\n`
@@ -101,7 +128,7 @@ Deno.serve(async (req) => {
         } else {
           const to = await adminEmailFor(db, pr.club_id)
           if (to) await sendEmail(db, {
-            to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal:${id}`,
+            to, template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal:${id}:${pr.club_responded_at}`,
             subject: `Approval needed: partnership for ${pr.clubs.name}`,
             text: `${pr.clubs.name} accepted a sponsorship for "${about}". It needs your approval.\n\nReview it here:\n${link('/university-admin')}\n`,
           })
@@ -111,38 +138,108 @@ Deno.serve(async (req) => {
     }
 
     case 'reviewed': {
-      const kind = body?.kind === 'proposal' ? 'proposal' : 'event'
+      const kind = ['event', 'proposal', 'opportunity', 'message'].includes(body?.kind) ? body.kind as string : 'event'
       const { data: adminRow } = await db.from('university_admins').select('university_id').eq('user_id', user.id).maybeSingle()
       if (!adminRow) return errorResponse('Not allowed', 403)
+      const mine = (club: { university_id?: string } | null | undefined) => club?.university_id === adminRow.university_id
+      const noteLine = (label: string, note: string | null) => (note ? `${label}: ${note}\n` : '')
 
-      let proposals: { id: string; status: string; denial_reason: string | null; partners: { email: string }; clubs: { name: string } }[] = []
+      if (kind === 'opportunity') {
+        const { data } = await db.from('opportunities').select('id, title, approval_status, review_note, reviewed_at, clubs(email, university_id)').eq('id', id).maybeSingle()
+        // deno-lint-ignore no-explicit-any
+        const o = data as any
+        if (!o || !mine(o.clubs) || o.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        const s = o.approval_status as string
+        await sendEmail(db, {
+          to: o.clubs.email, template: `opportunity_${s}`, relatedId: id, dedupeKey: `reviewed:opportunity:${id}:${o.reviewed_at}`,
+          subject: s === 'approved' ? `Your opportunity is live: ${o.title}` : s === 'denied' ? `Not approved: ${o.title}` : `Changes requested: ${o.title}`,
+          text: s === 'approved'
+            ? `Your university approved "${o.title}". Partners can see it now.\n\nShare it:\n${link('/club/partnerships?tab=opportunities')}\n`
+            : s === 'denied'
+              ? `Your university didn't approve "${o.title}".\n${noteLine('Reason', o.review_note)}\nDetails:\n${link('/club/partnerships?tab=opportunities')}\n`
+              : `Your university sent "${o.title}" back for changes.\n${noteLine('Note', o.review_note)}\nEdit and resubmit it here:\n${link('/club/partnerships?tab=opportunities')}\n`,
+        })
+        return json({ status: 'ok' })
+      }
+
+      if (kind === 'message') {
+        const { data } = await db.from('conversations')
+          .select('id, subject, club_id, partner_id, approval_status, review_note, reviewed_at, clubs(name, email, user_id, university_id), partners(name, email, user_id)')
+          .eq('id', id).maybeSingle()
+        // deno-lint-ignore no-explicit-any
+        const c = data as any
+        if (!c || !mine(c.clubs) || c.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        const s = c.approval_status as string
+        await sendEmail(db, {
+          to: c.clubs.email, template: `message_${s}`, relatedId: id, dedupeKey: `reviewed:message:${id}:${c.reviewed_at}`,
+          subject: s === 'approved' ? `Sent: your message to ${c.partners.name}` : s === 'denied' ? `Not approved: your message to ${c.partners.name}` : `Changes requested: your message to ${c.partners.name}`,
+          text: s === 'approved'
+            ? `Your university approved your message to ${c.partners.name} ("${c.subject}"), and it has been sent.\n\nConversation:\n${link(`/club/messages/${id}`)}\n`
+            : s === 'denied'
+              ? `Your university didn't approve your message to ${c.partners.name}, so it wasn't sent.\n${noteLine('Reason', c.review_note)}\nDetails:\n${link(`/club/messages/${id}`)}\n`
+              : `Your university asked for changes to your message to ${c.partners.name} before it's sent.\n${noteLine('Note', c.review_note)}\nEdit and resubmit it here:\n${link(`/club/messages/${id}`)}\n`,
+        })
+        if (s === 'approved') await emailNewMessage(db, c, 'club', c.clubs.user_id)
+        return json({ status: 'ok' })
+      }
+
+      let proposals: { id: string; status: string; denial_reason: string | null; reviewed_at: string; club_visible: boolean; partners: { email: string; name: string }; clubs: { name: string; email: string } }[] = []
       if (kind === 'event') {
         const { data: ev } = await db.from('events').select('id, name, approval_status, denial_reason, reviewed_at, club_id, clubs(name, email, university_id)').eq('id', id).maybeSingle()
         // deno-lint-ignore no-explicit-any
         const e = ev as any
-        if (!e || e.clubs?.university_id !== adminRow.university_id || e.approval_status === 'pending') return errorResponse('Not allowed', 403)
-        const approved = e.approval_status === 'approved'
+        if (!e || !mine(e.clubs) || e.approval_status === 'pending') return errorResponse('Not allowed', 403)
+        const s = e.approval_status as string
         await sendEmail(db, {
-          to: e.clubs.email, template: approved ? 'event_approved' : 'event_denied', relatedId: id,
+          to: e.clubs.email, template: `event_${s}`, relatedId: id,
           dedupeKey: `reviewed:event:${id}:${e.reviewed_at}`,
-          subject: `${approved ? 'Approved' : 'Not approved'}: ${e.name}`,
-          text: approved
+          subject: `${s === 'approved' ? 'Approved' : s === 'denied' ? 'Not approved' : 'Changes requested'}: ${e.name}`,
+          text: s === 'approved'
             ? `Your event "${e.name}" was approved.\n\nView it here:\n${link(`/club/events/${id}`)}\n`
-            : `Your event "${e.name}" was not approved.\nReason: ${e.denial_reason}\n\nYou can edit and resubmit it here:\n${link(`/club/events/${id}`)}\n`,
+            : s === 'denied'
+              ? `Your event "${e.name}" was not approved.\nReason: ${e.denial_reason}\n\nYou can edit and resubmit it here:\n${link(`/club/events/${id}`)}\n`
+              : `Your university sent "${e.name}" back for changes.\nNote: ${e.denial_reason}\n\nEdit and resubmit it here:\n${link(`/club/events/${id}`)}\n`,
         })
+        if (s === 'changes_requested') return json({ status: 'ok' })
         // deno-lint-ignore no-explicit-any
-        const { data } = await db.from('proposals').select('id, status, denial_reason, partners(email), clubs(name)').eq('event_id', id).eq('reviewed_at', e.reviewed_at) as any
+        const { data } = await db.from('proposals').select('id, status, denial_reason, reviewed_at, club_visible, partners(email, name), clubs(name, email)').eq('event_id', id).eq('reviewed_at', e.reviewed_at) as any
         proposals = data ?? []
       } else {
         // deno-lint-ignore no-explicit-any
-        const { data } = await db.from('proposals').select('id, status, denial_reason, partners(email), clubs(name, email, university_id), opportunities(title)').eq('id', id).maybeSingle() as any
-        if (!data || data.clubs?.university_id !== adminRow.university_id || !['approved', 'denied'].includes(data.status)) return errorResponse('Not allowed', 403)
+        const { data } = await db.from('proposals').select('id, status, denial_reason, reviewed_at, club_visible, submitted_at, partners(email, name), clubs(name, email, university_id), opportunities(title), events(name)').eq('id', id).maybeSingle() as any
+        if (!data || !mine(data.clubs) || !data.reviewed_at) return errorResponse('Not allowed', 403)
+        const about = data.opportunities?.title ?? data.events?.name ?? 'your club'
+        const key = `reviewed:proposal:${id}:${data.reviewed_at}`
+        if (data.status === 'pending_club') {
+          // Screening approved: the club sees it now.
+          await emailNewProposal(db, data, about)
+          await sendEmail(db, {
+            to: data.partners.email, template: 'proposal_screened', relatedId: id, dedupeKey: `${key}:partner`,
+            subject: `Your proposal was sent to ${data.clubs.name}`,
+            text: `${data.clubs.name}'s university approved your proposal for "${about}", and the club can see it now.\n\nSee your proposals:\n${link('/partner/proposals')}\n`,
+          })
+          return json({ status: 'ok' })
+        }
+        if (data.status === 'changes_requested') {
+          await sendEmail(db, {
+            to: data.partners.email, template: 'proposal_changes_requested', relatedId: id, dedupeKey: `${key}:partner`,
+            subject: `Changes requested: your proposal to ${data.clubs.name}`,
+            text: `${data.clubs.name}'s university asked for changes to your proposal for "${about}".\n${noteLine('Note', data.denial_reason)}\nEdit and resubmit it here:\n${link('/partner/proposals')}\n`,
+          })
+          if (data.club_visible) await sendEmail(db, {
+            to: data.clubs.email, template: 'proposal_changes_requested', relatedId: id, dedupeKey: `${key}:club`,
+            subject: `Partnership sent back to ${data.partners.name}`,
+            text: `Your university sent the partnership with ${data.partners.name} for "${about}" back to them to revise.\n${noteLine('Note', data.denial_reason)}\nYou'll be asked to accept the new terms.\n\nDetails:\n${link('/club/partnerships?tab=proposals')}\n`,
+          })
+          return json({ status: 'ok' })
+        }
+        if (!['approved', 'denied'].includes(data.status)) return errorResponse('Not allowed', 403)
         const approved = data.status === 'approved'
-        await sendEmail(db, {
+        if (data.club_visible) await sendEmail(db, {
           to: data.clubs.email, template: approved ? 'partnership_approved' : 'partnership_denied', relatedId: id,
-          dedupeKey: `reviewed:proposal:${id}:club`,
+          dedupeKey: `${key}:club`,
           subject: `Partnership ${approved ? 'approved' : 'not approved'}`,
-          text: `Your partnership for "${data.opportunities?.title ?? 'your club'}" was ${approved ? 'approved' : `not approved.\nReason: ${data.denial_reason}`}.\n\nDetails:\n${link('/club/partnerships?tab=proposals')}\n`,
+          text: `Your partnership for "${about}" was ${approved ? 'approved' : `not approved.\nReason: ${data.denial_reason}`}.\n\nDetails:\n${link('/club/partnerships?tab=proposals')}\n`,
         })
         proposals = [data]
       }
@@ -151,7 +248,7 @@ Deno.serve(async (req) => {
         const approved = p.status === 'approved'
         await sendEmail(db, {
           to: p.partners.email, template: approved ? 'partnership_approved' : 'partnership_denied', relatedId: p.id,
-          dedupeKey: `reviewed:proposal:${p.id}:partner`,
+          dedupeKey: `reviewed:proposal:${p.id}:${p.reviewed_at}:partner`,
           subject: `Your sponsorship with ${p.clubs.name} was ${approved ? 'approved' : 'not approved'}`,
           text: approved
             ? `The university approved your sponsorship with ${p.clubs.name}. You're all set!\n\nSee it here:\n${link('/partner/proposals')}\n`
@@ -176,7 +273,7 @@ Deno.serve(async (req) => {
           `${e.clubs.name} reported on "${e.name}", which you sponsored:`,
           '',
           `Attendees: ${report.attendees}`,
-          report.offers_redeemed !== null ? `Offers redeemed: ${report.offers_redeemed}` : null,
+          report.offers_redeemed !== null ? `Offers extended: ${report.offers_redeemed}` : null,
           report.notes ? `Notes from the club: ${report.notes}` : null,
           '',
           'See your results and other upcoming opportunities:',
@@ -232,3 +329,32 @@ Deno.serve(async (req) => {
       return errorResponse('Unknown notification type')
   }
 })
+
+/** "New message" email to the other side (at most one per thread per day). */
+// deno-lint-ignore no-explicit-any
+async function emailNewMessage(db: SupabaseClient, c: any, side: 'club' | 'partner', senderUserId: string) {
+  const { data: msg } = await db.from('messages').select('body, created_at').eq('conversation_id', c.id)
+    .eq('sender_user_id', senderUserId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (!msg) return 'skipped'
+  const to = side === 'club' ? c.partners.email : c.clubs.email
+  const from = side === 'club' ? c.clubs.name : c.partners.name
+  const route = side === 'club' ? `/partner/messages/${c.id}` : `/club/messages/${c.id}`
+  const preview = msg.body.length > 400 ? msg.body.slice(0, 400) + '…' : msg.body
+  return sendEmail(db, {
+    to, template: 'new_message', relatedId: c.id,
+    dedupeKey: `message:${c.id}:${side === 'club' ? 'partner' : 'club'}:${today()}`,
+    subject: `New message from ${from}: ${c.subject}`,
+    text: `${from} wrote:\n\n${preview}\n\nReply on CampusBridge:\n${link(route)}\n`,
+  })
+}
+
+/** "New proposal" email to the club (once per submission). */
+// deno-lint-ignore no-explicit-any
+async function emailNewProposal(db: SupabaseClient, pr: any, about: string) {
+  return sendEmail(db, {
+    to: pr.clubs.email, template: 'new_proposal', relatedId: pr.id, dedupeKey: `proposal_submitted:${pr.id}:${pr.submitted_at}`,
+    subject: `New sponsorship proposal from ${pr.partners.name}`,
+    text: `${pr.partners.name} sent a proposal for "${about}".\n\nReview and accept or decline it here:\n${link('/club/partnerships?tab=proposals')}\n`,
+  })
+}
+

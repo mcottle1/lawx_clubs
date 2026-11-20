@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { logoUrl } from '../../lib/storage'
 import { supabase } from '../../lib/supabase'
 import type { ConversationListItem } from '../../lib/types'
+import StatusBadge from '../StatusBadge'
 import { Card, PageHeader, Spinner } from '../ui'
 
 /** Conversation list for clubs (/club/messages) and partners (/partner/messages). */
@@ -35,6 +36,7 @@ export default function Inbox({ side }: { side: 'club' | 'partner' }) {
                       <p className="flex items-center gap-2 text-sm">
                         <span className={c.unread ? 'font-semibold' : 'font-medium'}>{name}</span>
                         {c.unread && <span className="rounded-full bg-accent-600 px-1.5 text-xs text-white">New</span>}
+                        {c.approval_status !== 'approved' && <StatusBadge status={c.approval_status} />}
                       </p>
                       <p className="truncate text-sm text-slate-700">{c.subject}</p>
                       <p className="truncate text-xs text-slate-500">{c.last_message}</p>

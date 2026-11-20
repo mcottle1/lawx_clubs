@@ -8,6 +8,8 @@ export interface ClubInfo {
   universityState: string | null
   /** The university admin's scheduling link/instructions (null if none yet). */
   scheduling: Pick<UniversityAdmin, 'scheduling_url' | 'scheduling_instructions'> | null
+  /** What the university requires approval for (affects wording only; the database enforces it). */
+  approvals: { message: boolean; opportunity: boolean }
   userId: string
   refreshClub: () => Promise<void>
 }

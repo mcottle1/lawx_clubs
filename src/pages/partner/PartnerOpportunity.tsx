@@ -25,7 +25,7 @@ export default function PartnerOpportunity() {
 
   if (o === undefined) return <Spinner />
   if (o === null) return <Alert>This opportunity isn't available (it may have been filled or closed).</Alert>
-  const active = mine.find((p) => p.status === 'pending_club' || p.status === 'pending_admin' || p.status === 'approved')
+  const active = mine.find((p) => ['pending_review', 'pending_club', 'pending_admin', 'changes_requested', 'approved'].includes(p.status))
 
   return (
     <>
@@ -41,6 +41,8 @@ export default function PartnerOpportunity() {
             </div>
           ) : o.status !== 'open' ? (
             <p className="mt-2 text-sm text-slate-500">This opportunity is no longer open.</p>
+          ) : o.approval_status !== 'approved' ? (
+            <p className="mt-2 text-sm text-slate-500">The club is updating this opportunity. Check back soon.</p>
           ) : (
             <div className="mt-3">
               <p className="mb-3 text-sm text-slate-600">Tell the club what you're willing to provide. They'll accept or decline, then their university approves it.</p>
