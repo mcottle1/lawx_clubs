@@ -248,6 +248,11 @@ npx supabase functions deploy
   university admin until the admin turns them off (**Settings → What needs your approval**).
   Messages and posts that already exist stay live.
 
+- **University colors** added one migration (three color columns on `universities` and two small
+  functions). Run `npx supabase db push`; no functions or secrets changed. Test it: log in as a
+  university admin → **Settings → Colors for your university**, type or pick three colors (the
+  page previews them), **Save colors**, then log in as one of that university's clubs.
+
 ## Emailing club members
 
 Clubs can email their member list (or just their leadership) from **Members → Email members**,
@@ -750,3 +755,10 @@ color for buttons, links and active states), `--color-pop-*` (coral, bright high
 `--color-fresh-*` (teal, the second bright accent). Charts and the calendar read the same tokens,
 so changing them there updates the whole site. If you change them, keep text readable (dark text
 on the coral buttons, white text on indigo).
+
+**Per-university colors.** A university administrator can pick their own three colors in
+**Settings → Colors for your university**. They replace these defaults only for that university's
+clubs and its administrator; partners, other universities and logged-out visitors keep the
+CampusBridge colors. The site builds the full set of shades from the three picks
+(`src/lib/universityTheme.ts`) and nudges any shade that would make text hard to read, so even a
+very light pick stays readable. A club sees new colors the next time it opens the site.

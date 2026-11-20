@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { supabase } from '../../lib/supabase'
 import type { UniversityAdmin } from '../../lib/types'
 import { Alert, Button, Card, Field, inputClass, Spinner } from '../../components/ui'
+import ColorSettings from './ColorSettings'
 
 type AdminRow = UniversityAdmin & { universities: { name: string } | null }
 
@@ -78,6 +79,7 @@ export default function UniversityAdminHome() {
         </Card>
       </div>
       <ApprovalSettings row={row} onSaved={(r) => setRow({ ...row, ...r })} />
+      <ColorSettings />
     </>
   )
 }

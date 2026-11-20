@@ -409,3 +409,20 @@ Running log of judgment calls made where the spec was ambiguous.
   spent, receipt amounts) steps by $5 with the arrows; typing any amount, including cents, still
   works.
 
+## University colors (2026-11-21)
+
+- **Who sees them:** the university's clubs and its administrator. Partners work with many
+  universities, so they keep the CampusBridge colors, as do site admins and logged-out visitors.
+- **Three picks** (main color, highlight, second accent) map to the existing color tokens; the
+  shades in between are generated. Any shade used for text is adjusted until it meets WCAG AA
+  (4.5:1) against the backgrounds it's used on, which a unit test checks for awkward picks (white,
+  black, neon yellow, pastels, gray). A very light main color is shown slightly darker on buttons,
+  and the admin is told.
+- **Only colors**, not logos or fonts; the CampusBridge logo and name stay. Emails are plain text
+  and unaffected.
+- **When it applies:** the colors are cached per user, so pages open in the right colors; a club
+  sees a change the next time it opens the site.
+- **With the planned department admins (two-level administration),** this setting would belong to
+  the top-level (university/district) administrator, possibly with per-department colors. Not
+  built yet.
+

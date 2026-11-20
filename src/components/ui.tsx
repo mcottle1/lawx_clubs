@@ -8,7 +8,7 @@ type Variant = 'primary' | 'pop' | 'light' | 'secondary' | 'danger' | 'ghost'
 const variants: Record<Variant, string> = {
   primary: 'bg-accent-600 text-white shadow-sm shadow-accent-600/20 hover:bg-accent-700 disabled:opacity-60',
   // Bright call-to-action (coral with dark ink, 6:1 contrast) — use sparingly.
-  pop: 'bg-pop-400 text-accent-900 shadow-sm shadow-pop-500/30 hover:bg-pop-500 disabled:opacity-60',
+  pop: 'bg-pop-400 text-accent-900 shadow-sm shadow-pop-500/30 hover:bg-pop-hover disabled:opacity-60',
   // White button for dark backgrounds (e.g. the landing hero).
   light: 'bg-white text-accent-800 shadow-sm hover:bg-accent-50 disabled:opacity-60',
   secondary: 'border border-slate-300 bg-white text-slate-800 hover:border-accent-300 hover:bg-accent-50 disabled:opacity-60',

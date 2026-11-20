@@ -247,3 +247,8 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   member emails; partners see "offers extended" instead of "offers redeemed"; dollar inputs step
   by $5. Affected: University admin flow (approvals, settings), Club flow (messaging, opportunities,
   members), Partner flow (proposals, results wording).
+
+- **2026-11-21 — University colors.** A university administrator can pick three colors (main,
+  highlight, second accent) that the site uses for that university's clubs and its admin only.
+  Text stays readable whatever is picked. Affected: University admin flow (settings),
+  Non-functional requirements (branding).

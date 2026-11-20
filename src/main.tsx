@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { AuthProvider } from './auth/AuthProvider'
+import { UniversityThemeProvider } from './auth/UniversityTheme'
 import { supabase } from './lib/supabase'
 
 /**
@@ -32,7 +33,9 @@ handleAuthRedirect().finally(() => {
       {/* HashRouter so deep links work on GitHub Pages without server rewrites. */}
       <HashRouter>
         <AuthProvider>
-          <App />
+          <UniversityThemeProvider>
+            <App />
+          </UniversityThemeProvider>
         </AuthProvider>
       </HashRouter>
     </StrictMode>,

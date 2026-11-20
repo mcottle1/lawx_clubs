@@ -7,6 +7,9 @@
  *   fresh-*   bright accent #2 (teal): positive numbers, secondary chart series
  * Text/background pairs used in the app were checked for WCAG AA contrast.
  * Charts read these same variables (src/lib/theme.ts), so there's no second copy.
+ * A university can pick its own colors (University admin → Settings); those
+ * override these variables for that university's clubs and admin only
+ * (src/lib/universityTheme.ts builds the full scales from three colors).
  */
 @theme {
   --color-accent-50: #f1f0ff;
@@ -25,6 +28,7 @@
   --color-pop-400: #ff7a4d;
   --color-pop-500: #f0612e;
   --color-pop-700: #b93f14;
+  --color-pop-hover: #f0612e; /* bright buttons on hover (dark ink stays readable) */
 
   --color-fresh-50: #ecfdf8;
   --color-fresh-100: #ccf7ec;

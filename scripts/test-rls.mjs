@@ -656,5 +656,31 @@ check('admin approves it', !evApprove && (await evNow())?.approval_status === 'a
 
 }
 
+// =============================================================================
+// University colors
+// =============================================================================
+console.log('\n--- University colors ---')
+{
+  const { error: clubSet } = await clubA.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  const { error: partnerSet } = await partnerC.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  check('clubs and partners cannot set colors', !!clubSet && !!partnerSet)
+  const { error: badHex } = await admin.rpc('set_university_theme', { p_primary: 'red', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  check('colors must be #rrggbb', !!badHex)
+  const { error: partial } = await admin.rpc('set_university_theme', { p_primary: '#002e5d', p_pop: null, p_fresh: '#6cace4' })
+  check('all three colors are set together', !!partial)
+  const { error: setErr } = await admin.rpc('set_university_theme', { p_primary: '#002E5D', p_pop: '#ffc72c', p_fresh: '#6cace4' })
+  check('admin sets its university colors', !setErr, setErr?.message)
+  const { data: clubTheme } = await clubA.rpc('current_university_theme')
+  check('the university\'s clubs get them', clubTheme?.primary === '#002e5d' && clubTheme?.pop === '#ffc72c')
+  const { data: adminTheme } = await admin.rpc('current_university_theme')
+  check('so does its admin', adminTheme?.primary === '#002e5d')
+  const { data: partnerTheme } = await partnerC.rpc('current_university_theme')
+  const { data: usuTheme } = await usuAdmin.rpc('current_university_theme')
+  check('partners and other universities do not', partnerTheme === null && usuTheme === null)
+  await admin.rpc('set_university_theme', { p_primary: null, p_pop: null, p_fresh: null })
+  const { data: resetTheme } = await clubA.rpc('current_university_theme')
+  check('admin resets to the default colors', resetTheme === null)
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)
