@@ -482,6 +482,31 @@ by name) are reset to the default settings.
 Demo accounts use `@example.com` addresses; the site never actually sends email to them. Remove
 the demo data any time by deleting those users in Supabase → Authentication.
 
+### Start over with a clean database
+
+`scripts/wipe-data.mjs` deletes **everything except site admin accounts**: all clubs, partners,
+college and organization admins (and everything they own), all colleges, invites, the email log
+and every uploaded file. It also resets every university (not participating, default colors). The
+universities list and the database structure stay. Run it without `--yes` first to see what it
+would delete; nothing changes until you add `--yes`. **This can't be undone**, so take a backup
+first if anything real is in there (Supabase → Database → Backups).
+
+With the service role key set as in the demo data steps above:
+
+```bash
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/wipe-data.mjs
+```
+
+```bash
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/wipe-data.mjs --yes
+```
+
+```bash
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co node scripts/seed-demo.mjs --yes
+```
+
+Locally it's `npm run wipe:data -- --yes` and then `npm run seed:demo`.
+
 ## How to test Phase 6 (branding, charts, polish)
 
 1. Open the site: the **CampusBridge** name, bridge logo and new colors (indigo with coral and
