@@ -375,13 +375,34 @@ await conversation('pils', 'wasatch', 'Pro bono partnership', null, null, [
   ['partner', 'Possibly — can you share the date and expected number of clients?'],
 ])
 
-// ---- approved items count as signed off (multi-person approval) -----------------------
+// ---- a realistic approval record: submitted ~4 weeks before, approved ~3 weeks before,
+// signed off by the college's demo admin (multi-person approval) --------------------------
 {
-  const ids = Object.values(clubs).map((c) => c.id)
-  const signedAt = new Date().toISOString()
-  must(await db.from('events').update({ details_signed_at: signedAt }).in('club_id', ids).eq('approval_status', 'approved'), 'event sign-offs')
-  must(await db.from('events').update({ flyer_signed_at: signedAt }).in('club_id', ids).eq('approval_status', 'approved').not('flyer_path', 'is', null), 'flyer sign-offs')
-  must(await db.from('proposals').update({ signed_at: signedAt }).in('club_id', ids).eq('status', 'approved'), 'partnership sign-offs')
+  const adminFor = {}
+  for (const a of ADMINS) {
+    const { data } = await db.from('department_admins').select('user_id').eq('email', a.email).single()
+    adminFor[a.uni] = data.user_id
+  }
+  const clubUni = Object.fromEntries(CLUBS.map((c) => [clubs[c.key].id, c.uni]))
+  const day = 864e5
+  const { data: evs } = await db.from('events').select('id, club_id, starts_at, approval_status, flyer_path').in('club_id', Object.keys(clubUni))
+  for (const e of evs) {
+    const start = Date.parse(e.starts_at)
+    const submitted = new Date(Math.min(start - 28 * day, Date.now() - 2 * day)).toISOString()
+    const patch = { created_at: submitted }
+    if (e.approval_status === 'approved') {
+      const decided = new Date(Math.min(start - 21 * day, Date.now() - day)).toISOString()
+      const by = adminFor[clubUni[e.club_id]]
+      Object.assign(patch, { reviewed_at: decided, reviewed_by: by, details_signed_at: decided, details_signed_by: by },
+        e.flyer_path ? { flyer_signed_at: decided, flyer_signed_by: by } : {})
+    }
+    must(await db.from('events').update(patch).eq('id', e.id), 'event record')
+  }
+  const { data: props } = await db.from('proposals').select('id, club_id, reviewed_at').in('club_id', Object.keys(clubUni)).eq('status', 'approved')
+  for (const p of props) {
+    const by = adminFor[clubUni[p.club_id]]
+    must(await db.from('proposals').update({ reviewed_by: by, signed_by: by, signed_at: p.reviewed_at ?? new Date().toISOString() }).eq('id', p.id), 'partnership record')
+  }
 }
 
 // ---- items in the university approval queue ------------------------------------------
