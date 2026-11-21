@@ -109,6 +109,8 @@ export interface ClubEvent {
   partner_reminder_days: number | null
   location_reminder_days: number | null
   created_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
 }
 
 export interface EventReport {
@@ -231,6 +233,8 @@ export interface ProposalDetail {
   event_approval_status: ApprovalStatus | null
   department_id: string
   department_name: string
+  reviewed_at: string | null
+  reviewed_by: string | null
 }
 
 export interface ConversationListItem {

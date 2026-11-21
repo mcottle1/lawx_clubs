@@ -457,3 +457,23 @@ Running log of judgment calls made where the spec was ambiguous.
   and organization admins editing a college's settings from their own pages (the database allows
   it, but there's no screen for it).
 
+## Admin calendar, events notice, history, reopening approvals (2026-11-21)
+
+- **Reopening** is allowed until the event starts (partnerships without an event: any time). It
+  uses "changes requested" with a required note, not "denied", so the requester can fix and
+  resubmit. Reopening an event leaves its already-approved partnership approved (it can be
+  reopened separately); reopening a partnership takes the partner off the event and reopens the
+  opportunity, because revised terms need the club's acceptance again. Receipts keep their own
+  flow. The organization admin can reopen only for colleges without an admin.
+- **Calendar** shows every event of the admin's college (organization admin: the whole
+  university), including pending, sent-back and denied ones, in the viewer's time zone like the
+  club calendar.
+- **Events notice** lists approved events by default (pending ones optionally) whose start falls
+  in the chosen days (viewer's time zone), sorted by start time; times are shown in each event's
+  own time zone. Copy puts both formatted HTML (flyer images linked from the public flyers bucket)
+  and plain text on the clipboard. The PDF is generated in the browser (letter size); image flyers
+  are embedded, PDF flyers are linked.
+- **History/detail** pages are read-only records; "decided by" shows the admin's email when the
+  viewer is allowed to see it (co-admins; organization admins see all their colleges' admins),
+  otherwise "a university administrator".
+

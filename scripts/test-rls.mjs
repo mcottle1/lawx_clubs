@@ -821,5 +821,44 @@ console.log('\n--- Colleges ---')
   await orgAdmin.rpc('move_club', { p_club_id: clubBRow.id, p_department_id: byuLaw.id })
 }
 
+// =============================================================================
+// Reopening approvals (before the event)
+// =============================================================================
+console.log('\n--- Reopening approvals ---')
+{
+  const { data: ev } = await service.from('events').insert({ club_id: clubARow.id, name: `Approved ${stamp}`, starts_at: inDays(12), ends_at: inDays(12, 13), approval_status: 'approved', partner_id: partnerRow.id }).select().single()
+  const { data: opp } = await service.from('opportunities').insert({ club_id: clubARow.id, event_id: ev.id, title: `Opp ${stamp}`, status: 'filled' }).select().single()
+  const { data: prop } = await service.from('proposals').insert({ club_id: clubARow.id, partner_id: partnerRow.id, event_id: ev.id, opportunity_id: opp.id, amount: 200, status: 'approved' }).select().single()
+  const { data: past } = await service.from('events').insert({ club_id: clubARow.id, name: `Past approved ${stamp}`, starts_at: inDays(-3), ends_at: inDays(-3, 13), approval_status: 'approved' }).select().single()
+
+  const { error: clubR } = await clubA.rpc('reopen_event', { p_event_id: ev.id, p_note: 'x' })
+  const { error: partnerR } = await partnerC.rpc('reopen_event', { p_event_id: ev.id, p_note: 'x' })
+  const { error: usuR } = await usuAdmin.rpc('reopen_event', { p_event_id: ev.id, p_note: 'x' })
+  const { error: orgR } = await orgAdmin.rpc('reopen_event', { p_event_id: ev.id, p_note: 'x' })
+  check('only the club\'s acting admin can reopen (not the club, partner, other universities, or the org admin when the college has an admin)', !!clubR && !!partnerR && !!usuR && !!orgR)
+  const { error: noNote } = await admin.rpc('reopen_event', { p_event_id: ev.id, p_note: '' })
+  check('reopening needs a note', !!noNote)
+  const { error: pastR } = await admin.rpc('reopen_event', { p_event_id: past.id, p_note: 'Too late' })
+  check('an event that already happened cannot be reopened', !!pastR)
+
+  // Partnership first (the event stays approved)
+  const { error: propR } = await admin.rpc('reopen_proposal', { p_proposal_id: prop.id, p_note: 'Amount needs the dean’s OK' })
+  const { data: propAfter } = await partnerC.from('proposal_details').select('status, denial_reason').eq('id', prop.id).single()
+  const { data: evAfterProp } = await service.from('events').select('approval_status, partner_id').eq('id', ev.id).single()
+  const { data: oppAfter } = await service.from('opportunities').select('status').eq('id', opp.id).single()
+  check('reopening a partnership sends it back to the partner with the note', !propR && propAfter?.status === 'changes_requested' && propAfter?.denial_reason === 'Amount needs the dean’s OK', propR?.message)
+  check('...takes the partner off the event and reopens the opportunity; the event stays approved', evAfterProp?.partner_id === null && evAfterProp?.approval_status === 'approved' && oppAfter?.status === 'open')
+  const { error: again } = await admin.rpc('reopen_proposal', { p_proposal_id: prop.id, p_note: 'x' })
+  check('only approved partnerships can be reopened', !!again)
+
+  // Then the event
+  const { error: evR } = await admin.rpc('reopen_event', { p_event_id: ev.id, p_note: 'Please book a bigger room' })
+  const { data: evAfter } = await clubA.from('events').select('approval_status, denial_reason').eq('id', ev.id).single()
+  check('reopening an event sends it back to the club with the note', !evR && evAfter?.approval_status === 'changes_requested' && evAfter?.denial_reason === 'Please book a bigger room', evR?.message)
+  const { error: resub } = await clubA.rpc('resubmit_event', { p_event_id: ev.id })
+  const { data: evPending } = await clubA.from('events').select('approval_status').eq('id', ev.id).single()
+  check('the club resubmits it and it is pending again', !resub && evPending?.approval_status === 'pending')
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

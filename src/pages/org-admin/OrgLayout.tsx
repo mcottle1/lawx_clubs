@@ -42,6 +42,8 @@ export default function OrgLayout() {
   const tabs = [
     { to: '/org-admin', label: `${unit}s`, end: true },
     { to: '/org-admin/approvals', label: 'Approvals', end: false },
+    { to: '/org-admin/calendar', label: 'Calendar', end: false },
+    { to: '/org-admin/history', label: 'History', end: false },
     { to: '/org-admin/receipts', label: 'Receipts', end: false },
     { to: '/org-admin/clubs', label: 'Clubs', end: false },
     { to: '/org-admin/settings', label: 'Settings', end: false },

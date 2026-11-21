@@ -263,6 +263,14 @@ ev.wilBrunch = await event('wil', { name: 'Mentorship Brunch', day: -18, hour: 1
   receipts: [{ file: 'brunch-catering.png', amount: 300, what: 'Brunch catering', status: 'approved' }] })
 ev.wilDemo = await event('wil', { name: 'Legal Tech Demo Day', day: -5, hour: 12, location: 'Room 110', partner: 'lexicode', budget: 100 })
 ev.wilNegotiation = await event('wil', { name: 'Negotiation Skills Night', day: 14, hour: 18, location: 'Room 201', budget: 150, partnerReminder: 10 })
+
+// Flyers on two upcoming events (simple generated images), filed under Club files.
+for (const [key, e, rgb] of [['moot', ev.mootFinals, [44, 34, 135]], ['wil', ev.wilNegotiation, [240, 97, 46]]]) {
+  const path = `${clubs[key].user_id}/flyer-demo-${e.id}.png`
+  must(await db.storage.from('flyers').upload(path, png(480, 620, rgb), { contentType: 'image/png', upsert: true }), 'flyer upload')
+  must(await db.from('events').update({ flyer_path: path }).eq('id', e.id), 'event flyer')
+  must(await db.from('club_files').insert({ club_id: clubs[key].id, file_type: 'flyer', bucket: 'flyers', storage_path: path, file_name: 'flyer.png', mime_type: 'image/png', size_bytes: 2000, event_id: e.id }), 'flyer file')
+}
 ev.wilGala = await event('wil', { name: 'Spring Gala', day: 28, hour: 19, hours: 3, location: 'Alumni House', status: 'pending', partner: 'lexicode', budget: 1500,
   description: 'Annual celebration and awards night.' })
 

@@ -16,7 +16,17 @@ const COLORS = {
 }
 const LEGEND = { approved: 'Approved', pending: 'Pending', changes_requested: 'Changes requested', denied: 'Denied', past: 'Past' }
 
-export default function ClubCalendar({ events, reports }: { events: ClubEvent[]; reports: Map<string, EventReport> }) {
+/**
+ * Month/list calendar of events. Clubs see their own; admins pass `basePath`
+ * (where an event opens) and `label` (e.g. to prefix the club's name).
+ */
+export default function ClubCalendar({ events, reports, basePath = '/club/events', label, heading = 'Calendar' }: {
+  events: ClubEvent[]
+  reports: Map<string, EventReport>
+  basePath?: string
+  label?: (e: ClubEvent) => string
+  heading?: string
+}) {
   const navigate = useNavigate()
   const now = Date.now()
   const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
@@ -24,7 +34,7 @@ export default function ClubCalendar({ events, reports }: { events: ClubEvent[];
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">Calendar</h2>
+        <h2 className="font-medium">{heading}</h2>
         <ul className="flex flex-wrap gap-3 text-xs text-slate-600" aria-label="Legend">
           {(['approved', 'pending', 'changes_requested', 'denied', 'past'] as const).map((k) => (
             <li key={k} className="flex items-center gap-1">
@@ -47,7 +57,7 @@ export default function ClubCalendar({ events, reports }: { events: ClubEvent[];
           const report = reports.get(e.id)
           return {
             id: e.id,
-            title: e.name + (past && report ? ` · ${report.attendees} attended` : ''),
+            title: (label ? label(e) : e.name) + (past && report ? ` · ${report.attendees} attended` : ''),
             start: e.starts_at,
             end: e.ends_at,
             color: past ? COLORS.past : COLORS[e.approval_status],
@@ -55,14 +65,14 @@ export default function ClubCalendar({ events, reports }: { events: ClubEvent[];
         })}
         eventClick={(info) => {
           info.jsEvent.preventDefault()
-          navigate(`/club/events/${info.event.id}`)
+          navigate(`${basePath}/${info.event.id}`)
         }}
         eventDidMount={(info) => {
           // Make events reachable and readable by keyboard / screen readers.
           info.el.setAttribute('tabindex', '0')
           info.el.setAttribute('role', 'link')
           info.el.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); navigate(`/club/events/${info.event.id}`) }
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); navigate(`${basePath}/${info.event.id}`) }
           })
         }}
       />

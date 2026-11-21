@@ -6,6 +6,8 @@ import { PageHeader } from '../../components/ui'
 
 const tabs = [
   { to: '/university-admin', label: 'Approvals', end: true },
+  { to: '/university-admin/calendar', label: 'Calendar', end: false },
+  { to: '/university-admin/history', label: 'History', end: false },
   { to: '/university-admin/receipts', label: 'Receipts', end: false },
   { to: '/university-admin/clubs', label: 'Clubs', end: false },
   { to: '/university-admin/settings', label: 'Settings', end: false },
@@ -36,7 +38,7 @@ export default function AdminLayout() {
           </NavLink>
         ))}
       </nav>
-      <Outlet />
+      <Outlet context={where} />
     </>
   )
 }

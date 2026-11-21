@@ -42,6 +42,12 @@ const PublicOpportunity = lazy(() => import('./pages/PublicOpportunity'))
 const UniversityAdminHome = lazy(() => import('./pages/university-admin/UniversityAdminHome'))
 const SiteAdmin = lazy(() => import('./pages/site-admin/SiteAdmin'))
 const OrgLayout = lazy(() => import('./pages/org-admin/OrgLayout'))
+const CollegeCalendar = lazy(() => import('./pages/university-admin/CollegePages').then((m) => ({ default: m.CollegeCalendar })))
+const CollegeHistory = lazy(() => import('./pages/university-admin/CollegePages').then((m) => ({ default: m.CollegeHistory })))
+const CollegeEventDetail = lazy(() => import('./pages/university-admin/CollegePages').then((m) => ({ default: m.CollegeEventDetail })))
+const OrgCalendar = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgCalendar })))
+const OrgHistory = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgHistory })))
+const OrgEventDetail = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgEventDetail })))
 const OrgColleges = lazy(() => import('./pages/org-admin/OrgColleges'))
 const OrgApprovals = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgApprovals })))
 const OrgReceipts = lazy(() => import('./pages/org-admin/OrgPages').then((m) => ({ default: m.OrgReceipts })))
@@ -88,6 +94,9 @@ export default function App() {
           </Route>
           <Route path="university-admin" element={<RequireRole roles={['university_admin']}><AdminLayout /></RequireRole>}>
             <Route index element={<Approvals />} />
+            <Route path="calendar" element={<CollegeCalendar />} />
+            <Route path="history" element={<CollegeHistory />} />
+            <Route path="events/:id" element={<CollegeEventDetail />} />
             <Route path="receipts" element={<ReceiptsQueue />} />
             <Route path="clubs" element={<ClubsOverview />} />
             <Route path="settings" element={<UniversityAdminHome />} />
@@ -95,6 +104,9 @@ export default function App() {
           <Route path="org-admin" element={<RequireRole roles={['org_admin']}><OrgLayout /></RequireRole>}>
             <Route index element={<OrgColleges />} />
             <Route path="approvals" element={<OrgApprovals />} />
+            <Route path="calendar" element={<OrgCalendar />} />
+            <Route path="history" element={<OrgHistory />} />
+            <Route path="events/:id" element={<OrgEventDetail />} />
             <Route path="receipts" element={<OrgReceipts />} />
             <Route path="clubs" element={<OrgClubs />} />
             <Route path="settings" element={<OrgSettings />} />

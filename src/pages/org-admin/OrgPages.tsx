@@ -2,7 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Alert, Button, Card, Field, inputClass } from '../../components/ui'
 import { supabase } from '../../lib/supabase'
 import type { UnitLabel } from '../../lib/types'
+import AdminCalendar from '../university-admin/AdminCalendar'
+import AdminEventDetail from '../university-admin/AdminEventDetail'
 import Approvals from '../university-admin/Approvals'
+import EventHistory from '../university-admin/EventHistory'
 import ClubsOverview from '../university-admin/ClubsOverview'
 import ColorSettings from '../university-admin/ColorSettings'
 import ReceiptsQueue from '../university-admin/ReceiptsQueue'
@@ -19,6 +22,21 @@ export function OrgApprovals() {
       <Approvals oversight={{ actsFor }} />
     </>
   )
+}
+
+export function OrgCalendar() {
+  const { university } = useOrg()
+  return <AdminCalendar base="/org-admin" orgName={university.name} />
+}
+
+export function OrgHistory() {
+  const { actsFor } = useOrg()
+  return <EventHistory base="/org-admin" oversight={{ actsFor }} />
+}
+
+export function OrgEventDetail() {
+  const { actsFor } = useOrg()
+  return <AdminEventDetail base="/org-admin" oversight={{ actsFor }} />
 }
 
 export function OrgReceipts() {

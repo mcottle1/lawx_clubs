@@ -256,6 +256,10 @@ npx supabase functions deploy
   Backups, or `npx supabase db dump --data-only > backup.sql`. Then, as site admin, **invite an
   organization admin** for each university that's using the site.
 
+- **Admin calendar, events notice, history and reopening approvals** added one migration (two
+  functions for sending back an approved event or partnership). Run `npx supabase db push`; no
+  function changes. Re-run the demo data (`--reset`) to get demo flyers.
+
 - **University colors** added one migration (three color columns on `universities` and two small
   functions). Run `npx supabase db push`; no functions or secrets changed. Test it: log in as a
   university admin → **Settings → Colors for your university**, type or pick three colors (the
@@ -399,6 +403,32 @@ email addresses (e.g. a personal and a shared office address).
 Demo data has all of this ready: `demo-org-byu@example.com` (organization admin) and
 `demo-admin-byu@example.com` (J. Reuben Clark Law School admin); BYU's "Marriott School of
 Business" has no admin yet.
+
+## Admin calendar, events notice and history
+
+College admins (and organization admins, for the whole university) now have:
+
+- **Calendar**: every club's events in one month/list calendar, labelled by club and colored by
+  status. Click an event for its details.
+- **Upcoming events notice** (under the calendar): pick a date range (and whether to include
+  events still waiting for approval) → **Create notice**. It lists each event in date order with
+  its time, location, host club, description and flyer. **Copy for email** pastes it into an email
+  with the flyers as images; **Download PDF** saves it to attach.
+- **History**: every event (past, upcoming or all; filter by status; search), plus decided
+  partnerships. Each event opens a page with everything about it: details, flyer, the approval
+  record (who decided and when, notes), partnerships and their terms, the post-event report and
+  the receipts.
+- **Changing an approval**: until an event starts, an approved event or partnership can be **sent
+  back for changes** from its detail page (or History → Partnerships), with a note. It works like
+  "Send back" on a pending request: the club (or, for a partnership, the partner) edits and
+  resubmits, and it returns to Approvals. Everyone involved is emailed.
+
+**Test it** (demo: `demo-admin-byu@example.com`): **Calendar** → set **To** a month or two out,
+tick "Include events still waiting for approval" → **Create notice** → **Copy for email** and paste
+into an email, then **Download PDF**. **History** → **Bar Prep Info Lunch** shows a finished event
+with its report and receipts. **History → Upcoming → Moot Court Finals Night** → **Send
+partnership back for changes**, then **Send back for changes**; log in as
+`demo-club-moot@example.com` to see the note on the event.
 
 ## Custom domain
 

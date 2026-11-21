@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
 import ProposalTerms from '../../components/ProposalTerms'
 import StatusBadge from '../../components/StatusBadge'
@@ -32,6 +32,7 @@ const RPC: Record<Kind, [fn: string, idArg: string]> = {
  * the buttons only appear for colleges without an admin of their own.
  */
 export default function Approvals({ oversight }: { oversight?: { actsFor: Set<string> } }) {
+  const base = useLocation().pathname.startsWith('/org-admin') ? '/org-admin' : '/university-admin'
   const [events, setEvents] = useState<PendingEvent[] | null>(null)
   const [proposals, setProposals] = useState<ProposalDetail[]>([])
   const [opportunities, setOpportunities] = useState<OpportunityCard[]>([])
@@ -213,12 +214,15 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
 
       {recent.length > 0 && (
         <>
-          <h2 className="mb-2 mt-8 font-medium">Recently decided events</h2>
+          <div className="mb-2 mt-8 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-medium">Recently decided events</h2>
+            <Link to={`${base}/history`} className="text-sm text-accent-700 hover:underline">All events →</Link>
+          </div>
           <Card className="p-0">
             <ul className="divide-y divide-slate-100 text-sm">
               {recent.map((e) => (
                 <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2">
-                  <span>{e.name} <span className="text-slate-500">· {e.clubs?.name}{oversight && e.clubs?.departments ? ` · ${e.clubs.departments.name}` : ''}</span></span>
+                  <span><Link to={`${base}/events/${e.id}`} className="font-medium text-accent-700 hover:underline">{e.name}</Link> <span className="text-slate-500">· {e.clubs?.name}{oversight && e.clubs?.departments ? ` · ${e.clubs.departments.name}` : ''}</span></span>
                   <StatusBadge status={e.approval_status} />
                 </li>
               ))}

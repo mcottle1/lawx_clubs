@@ -259,3 +259,8 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   college at sign-up; partners see "Club · College · University". Colors are set per university
   with an optional per-college override; approval settings, room booking and receipts are per
   college. Affected: Accounts and roles, Club sign-up, University admin flow, Partner flow.
+- **2026-11-21 — Admin calendar, events notice, history; reopening approvals.** College (and
+  organization) admins get a calendar of all their clubs' events, an "upcoming events" notice for
+  a date range (copy for email or PDF), and a history of every event with full details (approval
+  record, partnerships, report, receipts). Until an event starts, an approved event or
+  partnership can be sent back for changes with a note. Affected: University admin flow.
