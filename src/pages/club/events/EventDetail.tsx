@@ -95,6 +95,20 @@ export default function EventDetail() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="space-y-4 md:col-span-2">
             <div className="flex items-center gap-2"><StatusBadge status={event.approval_status} /></div>
+            {event.approval_status === 'pending' && (() => {
+              // Each part can be approved by a different administrator.
+              const waitingPartnerships = proposals.filter((p) => p.status === 'pending_admin')
+              const steps = [
+                { label: 'Event details', done: !!event.details_signed_at },
+                ...(event.flyer_path ? [{ label: 'Flyer', done: !!event.flyer_signed_at }] : []),
+                ...waitingPartnerships.map((p) => ({ label: `Partnership with ${p.partner_name}`, done: !!p.signed_at })),
+              ]
+              return steps.length > 1 || steps.some((x) => x.done) ? (
+                <ul aria-label="Approval progress" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  {steps.map((x) => <li key={x.label} className={x.done ? 'text-green-800' : 'text-slate-600'}>{x.done ? '✓ Approved' : '○ Waiting'}: {x.label}</li>)}
+                </ul>
+              ) : null
+            })()}
             <Detail label="Description">{event.description || <Muted>No description.</Muted>}</Detail>
             <Detail label="Location">
               {event.location ?? (

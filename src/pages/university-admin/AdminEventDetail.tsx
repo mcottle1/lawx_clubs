@@ -13,6 +13,7 @@ import { notify } from '../../lib/notify'
 import { receiptUrl } from '../../lib/receipts'
 import { supabase } from '../../lib/supabase'
 import type { ClubEvent, EventReport, ProposalDetail, Receipt } from '../../lib/types'
+import { useApprovalParts } from './useApprovalParts'
 import { useReviewerNames } from './useReviewerNames'
 
 type EventRow = ClubEvent & {
@@ -39,6 +40,7 @@ export default function AdminEventDetail({ base, oversight }: { base: string; ov
   const [reopen, setReopen] = useState<Reopen | null>(null)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const names = useReviewerNames()
+  const parts = useApprovalParts()
 
   const load = useCallback(async () => {
     const [e, p, r, rc] = await Promise.all([
@@ -74,7 +76,12 @@ export default function AdminEventDetail({ base, oversight }: { base: string; ov
   if (event === null) return <Alert>Event not found.</Alert>
 
   const upcoming = new Date(event.starts_at) > new Date()
-  const canAct = !oversight || oversight.actsFor.has(event.clubs?.department_id ?? '')
+  const collegeId = event.clubs?.department_id ?? ''
+  const canAct = !oversight || oversight.actsFor.has(collegeId)
+  // Anyone who handles a part of this event's approval can send it back.
+  const canReopenEvent = parts.canSign(collegeId, 'event')
+    || (!!event.flyer_path && parts.canSign(collegeId, 'flyer'))
+    || (proposals.some((p) => p.status === 'approved') && parts.canSign(collegeId, 'partnership'))
   const flyer = publicUrl('flyers', event.flyer_path)
   const spent = receipts.reduce((s, r) => s + (r.status === 'denied' ? 0 : Number(r.amount)), 0)
 
@@ -111,6 +118,8 @@ export default function AdminEventDetail({ base, oversight }: { base: string; ov
             <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <div><dt className="text-slate-500">Submitted</dt><dd>{when(event.created_at)}</dd></div>
               <div><dt className="text-slate-500">Last decision</dt><dd>{event.reviewed_at ? `${when(event.reviewed_at)} by ${names(event.reviewed_by)}` : 'Not decided yet'}</dd></div>
+              <div><dt className="text-slate-500">Event details signed</dt><dd>{event.details_signed_at ? `${when(event.details_signed_at)} by ${names(event.details_signed_by)}` : 'Not yet'}</dd></div>
+              {event.flyer_path && <div><dt className="text-slate-500">Flyer signed</dt><dd>{event.flyer_signed_at ? `${when(event.flyer_signed_at)} by ${names(event.flyer_signed_by)}` : 'Not yet'}</dd></div>}
               {event.denial_reason && event.approval_status !== 'approved' && (
                 <div className="sm:col-span-2"><dt className="text-slate-500">{event.approval_status === 'denied' ? 'Reason' : 'Note to the club'}</dt><dd>{event.denial_reason}</dd></div>
               )}
@@ -118,7 +127,7 @@ export default function AdminEventDetail({ base, oversight }: { base: string; ov
             {event.approval_status === 'pending' && canAct && (
               <p className="mt-3 text-sm"><Link to={base} className="font-medium text-accent-700 hover:underline">Decide it in Approvals →</Link></p>
             )}
-            {event.approval_status === 'approved' && upcoming && canAct && (
+            {event.approval_status === 'approved' && upcoming && canAct && canReopenEvent && (
               <div className="mt-3 border-t border-slate-100 pt-3">
                 <p className="text-xs text-slate-600">Approved by mistake, or something changed? Until the event starts you can send it back to the club with a note; they edit and resubmit it.</p>
                 <Button variant="secondary" className="mt-2" onClick={() => setReopen({ kind: 'event', id: event.id, label: event.name })}>Send back for changes</Button>
@@ -138,10 +147,10 @@ export default function AdminEventDetail({ base, oversight }: { base: string; ov
                     </div>
                     <div className="mt-2"><ProposalTerms p={p} /></div>
                     <p className="mt-2 text-xs text-slate-500">
-                      Proposed {when(p.created_at)}{p.reviewed_at && ` · last decision ${when(p.reviewed_at)} by ${names(p.reviewed_by)}`}
+                      Proposed {when(p.created_at)}{p.signed_at && ` · signed ${when(p.signed_at)} by ${names(p.signed_by)}`}{p.reviewed_at && ` · last decision ${when(p.reviewed_at)} by ${names(p.reviewed_by)}`}
                     </p>
                     {p.denial_reason && p.status !== 'approved' && <p className="mt-1 text-xs text-slate-600">Note: {p.denial_reason}</p>}
-                    {p.status === 'approved' && upcoming && canAct && (
+                    {p.status === 'approved' && upcoming && canAct && parts.canSign(collegeId, 'partnership') && (
                       <Button variant="secondary" className="mt-2 px-3 py-1 text-sm" onClick={() => setReopen({ kind: 'proposal', id: p.id, label: `partnership with ${p.partner_name}` })}>
                         Send partnership back for changes
                       </Button>

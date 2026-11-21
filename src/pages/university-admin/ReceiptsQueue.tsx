@@ -7,6 +7,7 @@ import { notify } from '../../lib/notify'
 import { receiptUrl } from '../../lib/receipts'
 import { supabase } from '../../lib/supabase'
 import type { Receipt, ReceiptStatus } from '../../lib/types'
+import { useApprovalParts } from './useApprovalParts'
 
 type Row = Receipt & {
   clubs: { name: string; department_id: string; departments: { name: string } | null } | null
@@ -31,6 +32,7 @@ export default function ReceiptsQueue({ oversight }: { oversight?: { actsFor: Se
   const [denying, setDenying] = useState<Row | null>(null)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const parts = useApprovalParts()
 
   const load = useCallback(async () => {
     const statuses = FILTERS.find((f) => f.key === filter)!.statuses
@@ -97,6 +99,10 @@ export default function ReceiptsQueue({ oversight }: { oversight?: { actsFor: Se
                     {r.admin_note && <p className="mt-1 text-xs text-slate-600">Note: {r.admin_note}</p>}
                     {oversight && !oversight.actsFor.has(r.clubs?.department_id ?? '') ? (
                       <p className="mt-3 text-xs text-slate-500">Handled by {r.clubs?.departments?.name ?? 'the college'}’s admins</p>
+                    ) : !parts.canSign(r.clubs?.department_id ?? '', 'receipts') ? (
+                      (r.status === 'pending' || r.status === 'approved') && (
+                        <p className="mt-3 text-xs text-slate-500">Reviewed by {parts.holders(r.clubs?.department_id ?? '', 'receipts').join(', ') || 'another admin'}</p>
+                      )
                     ) : <div className="mt-3 flex flex-wrap gap-2">
                       {r.status === 'pending' && <Button disabled={busy === r.id} onClick={() => void move(r, 'approved')}>Approve</Button>}
                       {r.status === 'approved' && <Button disabled={busy === r.id} onClick={() => void move(r, 'reimbursed')}>Mark reimbursed</Button>}

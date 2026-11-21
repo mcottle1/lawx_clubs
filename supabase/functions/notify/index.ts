@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
           template: 'pending_approval', relatedId: id, dedupeKey: `pending_message:${id}:${c.submitted_at}`,
           subject: `Approval needed: ${c.clubs.name}'s message to ${c.partners.name}`,
           text: `${c.clubs.name} wants to message ${c.partners.name} ("${c.subject}"). It needs your approval before it's sent.\n\nReview it here:\n${link('/university-admin')}\n`,
-        })
+        }, ['partnership'])
         return json({ status })
       }
       return json({ status: await emailNewMessage(db, c, side, user.id) })
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         template: 'pending_approval', relatedId: id, dedupeKey: `pending_opportunity:${id}:${op.submitted_at}`,
         subject: `Approval needed: ${op.clubs.name}'s opportunity "${op.title}"`,
         text: `${op.clubs.name} posted a sponsorship opportunity, "${op.title}". Partners see it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
-      })
+      }, ['partnership'])
       return json({ status })
     }
 
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
           template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal_review:${id}:${pr.submitted_at}`,
           subject: `Approval needed: proposal from ${pr.partners.name} to ${pr.clubs.name}`,
           text: `${pr.partners.name} sent ${pr.clubs.name} a sponsorship proposal for "${about}". The club sees it once you approve it.\n\nReview it here:\n${link('/university-admin')}\n`,
-        })
+        }, ['partnership'])
         return json({ status })
       }
       if (pr.status !== 'pending_club') return json({ status: 'skipped' })
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
             template: 'pending_approval', relatedId: id, dedupeKey: `pending_proposal:${id}:${pr.club_responded_at}`,
             subject: `Approval needed: partnership for ${pr.clubs.name}`,
             text: `${pr.clubs.name} accepted a sponsorship for "${about}". It needs your approval.\n\nReview it here:\n${link('/university-admin')}\n`,
-          })
+          }, ['partnership'])
         }
       }
       return json({ status })
@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
             template: 'receipts_submitted', relatedId: id, dedupeKey: `receipts_submitted:${id}:${count}`,
             subject: `Receipts to review: ${e.clubs.name}`,
             text: `${e.clubs.name} submitted ${count} receipt(s) for "${e.name}".\n\nReview them here:\n${link('/university-admin/receipts')}\n`,
-          })
+          }, ['receipts'])
         }
       }
       return json(out)

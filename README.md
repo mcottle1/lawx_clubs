@@ -256,6 +256,11 @@ npx supabase functions deploy
   Backups, or `npx supabase db dump --data-only > backup.sql`. Then, as site admin, **invite an
   organization admin** for each university that's using the site.
 
+- **Multi-person approval** added one migration and changed the `notify` function. Run
+  `npx supabase db push` and `npx supabase functions deploy`. Nothing changes until a college
+  assigns parts: every college admin starts with every part checked. Re-run the demo data
+  (`--reset`) for the demo split (a second BYU Law admin who signs flyers).
+
 - **Admin calendar, events notice, history and reopening approvals** added one migration (two
   functions for sending back an approved event or partnership). Run `npx supabase db push`; no
   function changes. Re-run the demo data (`--reset`) to get demo flyers.
@@ -404,6 +409,40 @@ Demo data has all of this ready: `demo-org-byu@example.com` (organization admin)
 `demo-admin-byu@example.com` (J. Reuben Clark Law School admin); BYU's "Marriott School of
 Business" has no admin yet.
 
+## Multi-person approval
+
+A request can need sign-offs from different people, one per part:
+
+| Part | What it covers |
+| --- | --- |
+| Event details | Every event |
+| Flyer | Events with a flyer |
+| Partnership | Partnerships (screening and final approval), opportunity posts, first messages to partners |
+| Receipts | The receipts queue |
+
+In **Settings → Who approves what**, college admins check which parts each of them handles (the
+organization admin can too). One person can have every part, which works exactly as before; or
+different people can split them. An event is approved once **every part it needs** is signed: its
+details, its flyer (if any) and any partnership waiting on it. The Approvals page shows a checklist
+on each event ("✓ Event details: signed by … · ○ Flyer: waiting (…)"), and the button approves just
+your parts. Clubs see the same progress on their event page.
+
+- If **nobody** at the college is checked for a part, any of its admins can sign it, so requests
+  never get stuck. An organization admin stepping in for a college without admins signs all parts.
+- **Anyone who handles any part** of a request can send it back or deny it; that clears all its
+  sign-offs, so it's reviewed fresh after the club resubmits. Sending back an already approved
+  event also clears them.
+- **When a club edits an event, only the affected part is signed again**: new details → event
+  details; a new flyer → the flyer (a new flyer now always needs approval); a new sponsor → the
+  partnership.
+- "Approval needed" emails go only to the people responsible for the parts still waiting.
+
+**Test it** (demo, password `campusbridge-demo`): as `demo-admin-byu@example.com`, open
+**Approvals**. "Spring Networking Mixer" shows two sign-offs; click **Approve event details**. Log
+in as `demo-flyers-byu@example.com` (who handles flyers only) and approve the rest. Their
+Approvals page shows other requests as "Waiting for …" without buttons. **Settings → Who approves
+what** shows and changes the split.
+
 ## Admin calendar, events notice and history
 
 College admins (and organization admins, for the whole university) now have:
@@ -498,7 +537,8 @@ by name) are reset to the default settings.
 | Who | Email | Good for trying |
 | --- | --- | --- |
 | BYU organization admin | `demo-org-byu@example.com` | Colleges, inviting a college admin, read-only approvals, moving clubs, colors |
-| BYU Law college admin | `demo-admin-byu@example.com` | Approvals (an event + partnership, a first message, a post), receipts queue, clubs overview |
+| BYU Law college admin | `demo-admin-byu@example.com` | Approvals (an event + partnership, a first message, a post), receipts queue, clubs overview; handles everything except flyers |
+| BYU Law flyer approver | `demo-flyers-byu@example.com` | Multi-person approval: signs off on flyers only |
 | Utah organization admin | `demo-org-utah@example.com` | A university with one college |
 | Utah Law college admin | `demo-admin-utah@example.com` | A receipt waiting for review |
 | Moot Court Society (BYU) | `demo-club-moot@example.com` | Full dashboard and charts, a proposal to accept, unread message |

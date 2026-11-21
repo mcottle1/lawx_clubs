@@ -89,7 +89,9 @@ function at(days, hour = 12) {
   return d.toISOString()
 }
 const ymd = (iso) => iso.slice(0, 10)
-const allEmails = [...ADMINS.flatMap((a) => [a.email, a.org]), ...PARTNERS.map((p) => p.email), ...CLUBS.map((c) => c.email)]
+// A second BYU Law admin who signs off on flyers only (multi-person approval).
+const FLYER_ADMIN = 'demo-flyers-byu@example.com'
+const allEmails = [...ADMINS.flatMap((a) => [a.email, a.org]), FLYER_ADMIN, ...PARTNERS.map((p) => p.email), ...CLUBS.map((c) => c.email)]
 
 async function findUsers(emails) {
   const found = new Map()
@@ -154,6 +156,18 @@ for (const a of ADMINS) {
   must(await db.from('departments').update({ is_participating: true }).eq('id', dept.id), 'college participating')
   must(await db.from('universities').update({ is_participating: true }).eq('id', uni.id), 'participating')
 }
+// BYU Law splits approvals: flyers are signed by a second admin.
+{
+  const law = colleges['Brigham Young University']
+  const id = await createUser(FLYER_ADMIN, { role: 'invited_admin' })
+  must(await db.from('profiles').insert({ user_id: id, role: 'university_admin' }), 'flyer admin profile')
+  must(await db.from('department_admins').insert({
+    user_id: id, department_id: law.id, email: FLYER_ADMIN,
+    can_approve_events: false, can_approve_flyers: true, can_approve_partnerships: false, can_review_receipts: false,
+  }), 'flyer admin row')
+  must(await db.from('department_admins').update({ can_approve_flyers: false }).eq('email', 'demo-admin-byu@example.com'), 'byu admin parts')
+}
+
 // A BYU college with no admin yet (the organization admin's "invite an admin" state).
 await college(unis['Brigham Young University'].id, 'Marriott School of Business')
 
@@ -265,7 +279,7 @@ ev.wilDemo = await event('wil', { name: 'Legal Tech Demo Day', day: -5, hour: 12
 ev.wilNegotiation = await event('wil', { name: 'Negotiation Skills Night', day: 14, hour: 18, location: 'Room 201', budget: 150, partnerReminder: 10 })
 
 // Flyers on two upcoming events (simple generated images), filed under Club files.
-for (const [key, e, rgb] of [['moot', ev.mootFinals, [44, 34, 135]], ['wil', ev.wilNegotiation, [240, 97, 46]]]) {
+for (const [key, e, rgb] of [['moot', ev.mootFinals, [44, 34, 135]], ['wil', ev.wilNegotiation, [240, 97, 46]], ['moot', ev.mootMixer, [13, 148, 136]]]) {
   const path = `${clubs[key].user_id}/flyer-demo-${e.id}.png`
   must(await db.storage.from('flyers').upload(path, png(480, 620, rgb), { contentType: 'image/png', upsert: true }), 'flyer upload')
   must(await db.from('events').update({ flyer_path: path }).eq('id', e.id), 'event flyer')
@@ -361,6 +375,15 @@ await conversation('pils', 'wasatch', 'Pro bono partnership', null, null, [
   ['partner', 'Possibly — can you share the date and expected number of clients?'],
 ])
 
+// ---- approved items count as signed off (multi-person approval) -----------------------
+{
+  const ids = Object.values(clubs).map((c) => c.id)
+  const signedAt = new Date().toISOString()
+  must(await db.from('events').update({ details_signed_at: signedAt }).in('club_id', ids).eq('approval_status', 'approved'), 'event sign-offs')
+  must(await db.from('events').update({ flyer_signed_at: signedAt }).in('club_id', ids).eq('approval_status', 'approved').not('flyer_path', 'is', null), 'flyer sign-offs')
+  must(await db.from('proposals').update({ signed_at: signedAt }).in('club_id', ids).eq('status', 'approved'), 'partnership sign-offs')
+}
+
 // ---- items in the university approval queue ------------------------------------------
 // (BYU's settings default to approving first messages and opportunity posts.)
 {
@@ -383,6 +406,7 @@ await conversation('pils', 'wasatch', 'Pro bono partnership', null, null, [
 console.log('\nDemo data created. Logins (password for all: ' + DEMO_PASSWORD + '):')
 const rows = [
   ...ADMINS.flatMap((a) => [[`${a.uni} organization admin`, a.org], [`${a.college} admin`, a.email]]),
+  ['J. Reuben Clark Law School flyer approver', FLYER_ADMIN],
   ...CLUBS.map((c) => [`Club: ${c.name}`, c.email]),
   ...PARTNERS.map((p) => [`Partner: ${p.name}`, p.email]),
 ]

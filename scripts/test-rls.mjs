@@ -860,5 +860,86 @@ console.log('\n--- Reopening approvals ---')
   check('the club resubmits it and it is pending again', !resub && evPending?.approval_status === 'pending')
 }
 
+// =============================================================================
+// Multi-person approval (parts: event, flyer, partnership, receipts)
+// =============================================================================
+console.log('\n--- Multi-person approval ---')
+{
+  // A second BYU Law admin who handles partnerships and receipts.
+  const coEmail = `co${stamp}@example.com`
+  const invRes = await orgAdmin.functions.invoke('invite-university-admin', { body: { kind: 'department', department_id: byuLaw.id, email: coEmail } })
+  await anon.functions.invoke('accept-admin-invite', { body: { action: 'accept', token: invRes.data.link.split('/').pop(), password: 'password123' } })
+  const co = client()
+  await co.auth.signInWithPassword({ email: coEmail, password: 'password123' })
+  const coId = (await co.auth.getUser()).data.user.id
+  const adminId = (await admin.auth.getUser()).data.user.id
+
+  const { error: clubSets } = await clubA.rpc('set_admin_parts', { p_user_id: coId, p_events: true, p_flyers: true, p_partnerships: true, p_receipts: true })
+  const { error: usuSets } = await usuAdmin.rpc('set_admin_parts', { p_user_id: coId, p_events: true, p_flyers: true, p_partnerships: true, p_receipts: true })
+  check('clubs and other universities cannot assign approval parts', !!clubSets && !!usuSets)
+  const { error: coSet } = await admin.rpc('set_admin_parts', { p_user_id: coId, p_events: false, p_flyers: false, p_partnerships: true, p_receipts: true })
+  const { error: meSet } = await orgAdmin.rpc('set_admin_parts', { p_user_id: adminId, p_events: true, p_flyers: true, p_partnerships: false, p_receipts: false })
+  check('college admins and the organization admin assign parts', !coSet && !meSet, (coSet ?? meSet)?.message)
+
+  // An event with a flyer and a partnership waiting on it
+  const { data: ev } = await service.from('events').insert({ club_id: clubARow.id, name: `Multi ${stamp}`, starts_at: inDays(25), ends_at: inDays(25, 13), flyer_path: `${clubARow.user_id}/f.png`, partner_id: partnerRow.id }).select().single()
+  const { data: pr } = await service.from('proposals').insert({ club_id: clubARow.id, partner_id: partnerRow.id, event_id: ev.id, amount: 300, status: 'pending_admin' }).select().single()
+  const { data: s1, error: s1e } = await co.rpc('sign_event', { p_event_id: ev.id })
+  check('the partnership approver signs only the partnership', !s1e && s1?.approved === false && JSON.stringify(s1.signed) === '["partnership"]' && JSON.stringify(s1.waiting) === '["event","flyer"]', JSON.stringify(s1 ?? s1e))
+  const { data: stillPending } = await service.from('events').select('approval_status').eq('id', ev.id).single()
+  check('...and the event is still pending', stillPending.approval_status === 'pending')
+  const { error: coAgain } = await co.rpc('sign_event', { p_event_id: ev.id })
+  check('with nothing left for them, they get a clear error', /Nothing here is yours/.test(coAgain?.message ?? ''), coAgain?.message)
+  const { data: s2 } = await admin.rpc('sign_event', { p_event_id: ev.id })
+  const { data: evDone } = await service.from('events').select('approval_status, details_signed_by, flyer_signed_by').eq('id', ev.id).single()
+  const { data: prDone } = await service.from('proposals').select('status, signed_by').eq('id', pr.id).single()
+  check('once the event approver signs details and flyer, everything is approved', s2?.approved === true && evDone.approval_status === 'approved' && prDone.status === 'approved', JSON.stringify(s2))
+  check('...with each part recorded under who signed it', evDone.details_signed_by === adminId && evDone.flyer_signed_by === adminId && prDone.signed_by === coId)
+
+  // Edits reset only the affected part
+  await clubA.from('events').update({ flyer_path: `${clubARow.user_id}/f2.png` }).eq('id', ev.id)
+  const { data: afterFlyer } = await service.from('events').select('approval_status, details_signed_at, flyer_signed_at').eq('id', ev.id).single()
+  check('a new flyer needs only the flyer signed again', afterFlyer.approval_status === 'pending' && afterFlyer.details_signed_at && !afterFlyer.flyer_signed_at)
+  const { data: waitingFlyer } = await admin.rpc('event_parts_waiting', { p_event_id: ev.id })
+  check('...which is all that is waiting', JSON.stringify(waitingFlyer) === '["flyer"]', JSON.stringify(waitingFlyer))
+  await admin.rpc('sign_event', { p_event_id: ev.id })
+  await clubA.from('events').update({ description: 'Changed details' }).eq('id', ev.id)
+  const { data: waitingDetails } = await admin.rpc('event_parts_waiting', { p_event_id: ev.id })
+  check('changed details need only the details signed again', JSON.stringify(waitingDetails) === '["event"]', JSON.stringify(waitingDetails))
+
+  // Send back: anyone with a part of the request; clears every sign-off
+  const { data: ev2 } = await service.from('events').insert({ club_id: clubARow.id, name: `Plain ${stamp}`, starts_at: inDays(26), ends_at: inDays(26, 13) }).select().single()
+  const { error: coSendsBackPlain } = await co.rpc('decide_event', { p_event_id: ev2.id, p_decision: 'send_back', p_note: 'x' })
+  check('someone without any part of a request cannot send it back', !!coSendsBackPlain)
+  const { error: coSendsBack } = await co.rpc('decide_event', { p_event_id: ev.id, p_decision: 'send_back', p_note: 'Fix the sponsor details' })
+  const { data: cleared } = await service.from('events').select('approval_status, details_signed_at, flyer_signed_at').eq('id', ev.id).single()
+  check('the partnership approver can send back an event with a partnership; all sign-offs clear', !coSendsBack && cleared.approval_status === 'changes_requested' && !cleared.details_signed_at && !cleared.flyer_signed_at, coSendsBack?.message)
+
+  // Posts, first messages and screening go to the partnership approver
+  const { data: op } = await service.from('opportunities').insert({ club_id: clubARow.id, title: `Post ${stamp}`, approval_status: 'pending' }).select().single()
+  const { error: adminPost } = await admin.rpc('decide_opportunity', { p_opportunity_id: op.id, p_decision: 'approve' })
+  const { error: coPost } = await co.rpc('decide_opportunity', { p_opportunity_id: op.id, p_decision: 'approve' })
+  check('opportunity posts are approved by the partnership approver only', !!adminPost && !coPost, coPost?.message)
+
+  // Receipts
+  const { data: past } = await service.from('events').insert({ club_id: clubARow.id, name: `Past ${stamp}`, starts_at: inDays(-4), ends_at: inDays(-4, 13), approval_status: 'approved' }).select().single()
+  const { data: rep } = await service.from('event_reports').insert({ event_id: past.id, attendees: 10, amount_spent: 20 }).select().single()
+  const { data: rc } = await service.from('receipts').insert({ club_id: clubARow.id, event_id: past.id, event_report_id: rep.id, storage_path: `${clubARow.user_id}/r-${stamp}.png`, file_name: 'r.png', amount: 20 }).select().single()
+  const { error: adminRc } = await admin.rpc('review_receipt', { p_receipt_id: rc.id, p_status: 'approved' })
+  const { error: coRc } = await co.rpc('review_receipt', { p_receipt_id: rc.id, p_status: 'approved' })
+  check('receipts are reviewed by the receipts reviewer only', !!adminRc && !coRc, coRc?.message)
+
+  // Nobody holds a part → any college admin can sign it
+  await orgAdmin.rpc('set_admin_parts', { p_user_id: coId, p_events: false, p_flyers: false, p_partnerships: true, p_receipts: true })
+  await orgAdmin.rpc('set_admin_parts', { p_user_id: adminId, p_events: true, p_flyers: false, p_partnerships: false, p_receipts: false })
+  const { data: ev3 } = await service.from('events').insert({ club_id: clubARow.id, name: `Fallback ${stamp}`, starts_at: inDays(27), ends_at: inDays(27, 13), flyer_path: `${clubARow.user_id}/f3.png` }).select().single()
+  const { data: s3 } = await admin.rpc('sign_event', { p_event_id: ev3.id })
+  check('if no one is assigned flyers, any college admin signs them', s3?.approved === true, JSON.stringify(s3))
+
+  // Back to everyone-does-everything for other tests
+  await orgAdmin.rpc('set_admin_parts', { p_user_id: adminId, p_events: true, p_flyers: true, p_partnerships: true, p_receipts: true })
+  await orgAdmin.rpc('remove_department_admin', { p_user_id: coId })
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nAll checks passed')
 process.exit(failures ? 1 : 0)

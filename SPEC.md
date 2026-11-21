@@ -264,3 +264,8 @@ Where this spec is ambiguous, make a reasonable assumption, note it in `ASSUMPTI
   a date range (copy for email or PDF), and a history of every event with full details (approval
   record, partnerships, report, receipts). Until an event starts, an approved event or
   partnership can be sent back for changes with a note. Affected: University admin flow.
+- **2026-11-24 — Multi-person approval.** Approvals are split into parts (event details, flyer,
+  partnership, receipts), each signed by the college admin(s) assigned to it; one person can still
+  hold every part. An event is approved once every part it needs is signed. Edits re-open only the
+  affected part; a send-back clears all sign-offs. Affected: University admin flow (approvals,
+  settings), Club flow (approval progress).

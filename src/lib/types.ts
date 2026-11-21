@@ -111,6 +111,11 @@ export interface ClubEvent {
   created_at: string
   reviewed_at: string | null
   reviewed_by: string | null
+  /** Sign-offs for multi-person approval (null = not signed). */
+  details_signed_by: string | null
+  details_signed_at: string | null
+  flyer_signed_by: string | null
+  flyer_signed_at: string | null
 }
 
 export interface EventReport {
@@ -235,6 +240,9 @@ export interface ProposalDetail {
   department_name: string
   reviewed_at: string | null
   reviewed_by: string | null
+  /** The partnership part's sign-off (final approval). */
+  signed_by: string | null
+  signed_at: string | null
 }
 
 export interface ConversationListItem {

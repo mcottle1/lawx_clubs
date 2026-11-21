@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import type { AdminRow, DepartmentSettings, UnitLabel } from '../../lib/types'
 import { Alert, Button, Card, Field, inputClass, Spinner } from '../../components/ui'
 import ColorSettings from './ColorSettings'
+import WhoApprovesWhat from './WhoApprovesWhat'
 
 type College = {
   department_id: string
@@ -96,6 +97,7 @@ export default function UniversityAdminHome() {
         </Card>
       </div>
       <ApprovalSettings row={settings} onSaved={(r) => setSettings({ ...settings, ...r })} />
+      <WhoApprovesWhat departmentId={college.department_id} />
       <ColorSettings scope="college" universityName={college.departments?.universities?.name ?? 'your university'} />
     </>
   )

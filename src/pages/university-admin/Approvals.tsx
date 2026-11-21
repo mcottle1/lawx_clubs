@@ -10,6 +10,8 @@ import { formatEventRange, usd } from '../../lib/format'
 import { notify } from '../../lib/notify'
 import { supabase } from '../../lib/supabase'
 import type { ClubEvent, MessageReview, OpportunityCard, ProposalDetail } from '../../lib/types'
+import { PART_LABEL, useApprovalParts, type ApprovalPart } from './useApprovalParts'
+import { useReviewerNames } from './useReviewerNames'
 
 type PendingEvent = ClubEvent & {
   clubs: { name: string; department_id: string; departments: { name: string } | null } | null
@@ -41,6 +43,8 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
   const [noting, setNoting] = useState<{ target: Target; decision: 'send_back' | 'deny' } | null>(null)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const parts = useApprovalParts()
+  const names = useReviewerNames()
 
   const load = useCallback(async () => {
     const [ev, pr, op, me, rec] = await Promise.all([
@@ -58,8 +62,23 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
   }, [])
   useEffect(() => { void load() }, [load])
 
-  async function decide(t: Target, decision: Decision, note?: string) {
+  async function decide(t: Target, decision: Decision, note?: string, college?: string) {
     setBusy(t.id)
+    // Approving an event signs the parts you're responsible for; it's approved once all are signed.
+    if (t.kind === 'event' && decision === 'approve') {
+      const { data, error } = await supabase.rpc('sign_event', { p_event_id: t.id })
+      setBusy(null)
+      if (error) return setMsg({ kind: 'error', text: error.message })
+      const r = data as { approved: boolean; signed: ApprovalPart[]; waiting: ApprovalPart[] }
+      if (r.approved) {
+        notify('reviewed', t.id, { kind: 'event' })
+        setMsg({ kind: 'success', text: `Approved: ${t.label}. The ${t.requester} has been notified.` })
+      } else {
+        const waiting = r.waiting.map((w) => `${PART_LABEL[w]}${college ? ` (${who(college, w)})` : ''}`).join(', ')
+        setMsg({ kind: 'success', text: `Signed ${r.signed.map((x) => PART_LABEL[x].toLowerCase()).join(' and ')} for ${t.label}. Still waiting for: ${waiting}.` })
+      }
+      return load()
+    }
     const [fn, idArg] = RPC[t.kind]
     const { error } = await supabase.rpc(fn, { [idArg]: t.id, p_decision: decision, p_note: note ?? null })
     setBusy(null)
@@ -77,15 +96,43 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
   const standalone = finals.filter((p) => !p.event_id || p.event_approval_status !== 'pending')
   const total = events.length + standalone.length + screening.length + opportunities.length + messages.length
 
-  const actions = (t: Target, college?: { id?: string; name?: string | null }) => oversight && !oversight.actsFor.has(college?.id ?? '') ? (
-    <p className="text-xs text-slate-500">Decided by {college?.name ?? 'the college'}’s admins</p>
-  ) : (
-    <div className="flex flex-wrap gap-2">
-      <Button disabled={busy === t.id} onClick={() => void decide(t, 'approve')}>Approve</Button>
-      <Button variant="secondary" disabled={busy === t.id} onClick={() => setNoting({ target: t, decision: 'send_back' })}>Send back</Button>
-      <Button variant="danger" disabled={busy === t.id} onClick={() => setNoting({ target: t, decision: 'deny' })}>Deny</Button>
-    </div>
-  )
+  /** Who handles a part at a college, for "waiting for" lines. */
+  const who = (collegeId: string, part: ApprovalPart) => {
+    const h = parts.holders(collegeId, part)
+    return h.length ? h.join(', ') : 'any college admin'
+  }
+
+  /**
+   * Buttons for one request. `parts`: the parts this request involves;
+   * `unsigned`: the ones still waiting. You can approve the unsigned parts
+   * you're responsible for, and send back or deny if you handle any part.
+   */
+  const actions = (
+    t: Target,
+    college: { id?: string; name?: string | null },
+    involved: ApprovalPart[] = ['partnership'],
+    unsigned: ApprovalPart[] = involved,
+  ) => {
+    const id = college.id ?? ''
+    if (oversight && !oversight.actsFor.has(id)) {
+      return <p className="text-xs text-slate-500">Decided by {college.name ?? 'the college'}’s admins</p>
+    }
+    if (!parts.loaded) return null
+    const mine = unsigned.filter((p) => parts.canSign(id, p))
+    if (!involved.some((p) => parts.canSign(id, p))) {
+      return <p className="max-w-xs text-xs text-slate-500">Waiting for {unsigned.map((p) => `${PART_LABEL[p].toLowerCase()} (${who(id, p)})`).join(', ')}</p>
+    }
+    const label = mine.length === unsigned.length ? 'Approve' : `Approve ${mine.map((p) => PART_LABEL[p].toLowerCase()).join(' & ')}`
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {mine.length > 0
+          ? <Button disabled={busy === t.id} onClick={() => void decide(t, 'approve', undefined, id)}>{label}</Button>
+          : <span className="text-xs text-slate-500">Your part is signed</span>}
+        <Button variant="secondary" disabled={busy === t.id} onClick={() => setNoting({ target: t, decision: 'send_back' })}>Send back</Button>
+        <Button variant="danger" disabled={busy === t.id} onClick={() => setNoting({ target: t, decision: 'deny' })}>Deny</Button>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -102,15 +149,32 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
           const flyer = publicUrl('flyers', e.flyer_path)
           const past = new Date(e.starts_at) < new Date()
           const t: Target = { kind: 'event', id: e.id, label: e.name, requester: withEvent.length ? 'club (and partner)' : 'club' }
+          const collegeId = e.clubs?.department_id ?? ''
+          const checklist: { part: ApprovalPart; label: string; signedAt: string | null; signedBy: string | null }[] = [
+            { part: 'event', label: 'Event details', signedAt: e.details_signed_at, signedBy: e.details_signed_by },
+            ...(e.flyer_path ? [{ part: 'flyer' as const, label: 'Flyer', signedAt: e.flyer_signed_at, signedBy: e.flyer_signed_by }] : []),
+            ...withEvent.map((p) => ({ part: 'partnership' as const, label: `Partnership with ${p.partner_name}`, signedAt: p.signed_at, signedBy: p.signed_by })),
+          ]
+          const involved = [...new Set(checklist.map((c) => c.part))]
+          const unsigned = [...new Set(checklist.filter((c) => !c.signedAt).map((c) => c.part))]
           return (
             <ReviewCard
               key={e.id}
               kind={`Event${withEvent.length > 0 ? ' + partnership' : ''}`}
               title={e.name}
               subtitle={<>{e.clubs?.name} · {formatEventRange(e.starts_at, e.ends_at, e.time_zone)}{past && <span className="block text-xs text-amber-800">This event's date has already passed.</span>}</>}
-              actions={actions(t, { id: e.clubs?.department_id, name: e.clubs?.departments?.name })}
+              actions={actions(t, { id: collegeId, name: e.clubs?.departments?.name }, involved, unsigned)}
               college={oversight ? e.clubs?.departments?.name : undefined}
               resubmitted={e.denial_reason}
+              footer={checklist.length > 1 || checklist.some((c) => c.signedAt) ? (
+                <ul aria-label="Sign-offs" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  {checklist.map((c) => (
+                    <li key={c.label} className={c.signedAt ? 'text-green-800' : 'text-slate-600'}>
+                      {c.signedAt ? '✓' : '○'} {c.label}: {c.signedAt ? `signed by ${names(c.signedBy)}` : `waiting (${who(collegeId, c.part)})`}
+                    </li>
+                  ))}
+                </ul>
+              ) : undefined}
             >
               <div className="grid gap-4 text-sm md:grid-cols-3">
                 <dl className="space-y-2 md:col-span-2">
@@ -141,7 +205,7 @@ export default function Approvals({ oversight }: { oversight?: { actsFor: Set<st
             kind="Partnership (accepted by the club)"
             title={`${p.partner_name} → ${p.club_name}`}
             subtitle={`${p.opportunity_title ?? p.event_name ?? 'General sponsorship'} · ${categoryLabel(p.partner_category)}`}
-            actions={actions({ kind: 'proposal', id: p.id, label: `partnership with ${p.partner_name}`, requester: 'partner' }, { id: p.department_id, name: p.department_name })}
+            actions={actions({ kind: 'proposal', id: p.id, label: `partnership with ${p.partner_name}`, requester: 'partner' }, { id: p.department_id, name: p.department_name }, ['partnership'])}
             college={oversight ? p.department_name : undefined}
             open
           >
@@ -261,9 +325,11 @@ function Group({ title, count, children }: { title: string; count: number; child
 
 /** One item to review: summary line, action buttons, details (collapsible unless `open`). */
 function ReviewCard({
-  kind, title, subtitle, actions, resubmitted, college, open: startOpen = false, children,
+  kind, title, subtitle, actions, resubmitted, college, footer, open: startOpen = false, children,
 }: {
   kind: string
+  /** Always visible under the title (e.g. sign-offs). */
+  footer?: ReactNode
   /** Shown to organization admins: which college it belongs to. */
   college?: string | null
   title: string
@@ -291,6 +357,7 @@ function ReviewCard({
             {actions}
           </div>
         </div>
+        {footer}
         {resubmitted && (
           <p className="mt-2 rounded-md bg-pop-50 px-3 py-1.5 text-xs text-pop-700">Resubmitted after your note: “{resubmitted}”</p>
         )}

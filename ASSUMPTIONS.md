@@ -477,3 +477,25 @@ Running log of judgment calls made where the spec was ambiguous.
   viewer is allowed to see it (co-admins; organization admins see all their colleges' admins),
   otherwise "a university administrator".
 
+## Multi-person approval (2026-11-24)
+
+- **Fixed parts**: event details, flyer, partnership (also covers opportunity posts, first
+  messages and proposal screening) and receipts. Colleges can't define their own parts yet.
+- **Assignments** are per college admin account (checkboxes, all on by default). College admins
+  can change them for anyone in their college, and so can the organization admin; there's no
+  separate "lead admin".
+- **Fallback**: a part with no active admin checked can be signed by any admin of the college.
+  Organization admins stepping in sign every part.
+- **What "approved" means**: an event is approved when its details, its flyer (if it has one) and
+  every partnership waiting on it are signed. A partnership waiting on a pending event is signed
+  as part of that event; a partnership on its own (no event, or an event that's already approved)
+  is approved by its own sign-off. Posts, first messages, screening and receipts are single-part
+  requests.
+- **Send back / deny** by anyone who handles any part of the request clears every sign-off on it.
+  Reopening an approved event also clears them; reopening an approved partnership clears its own.
+- **Edits**: changes to an event's details clear the details sign-off; a new flyer clears the
+  flyer sign-off and sends an approved event back to pending (before, a new flyer didn't need
+  approval); a new sponsor sends it back to pending for the partnership sign-off. Untouched parts
+  stay signed.
+- Existing approved events and partnerships were marked as signed by whoever approved them.
+
